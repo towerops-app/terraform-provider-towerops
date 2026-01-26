@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const defaultBaseURL = "https://app.towerops.io"
+const defaultBaseURL = "https://towerops.net"
 
 // Client is the TowerOps API client.
 type Client struct {
