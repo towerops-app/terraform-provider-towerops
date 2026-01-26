@@ -65,8 +65,9 @@ func (r *DeviceResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				},
 			},
 			"name": schema.StringAttribute{
-				Description: "The name of the device.",
-				Required:    true,
+				Description: "The name of the device. If not provided, will be auto-discovered.",
+				Optional:    true,
+				Computed:    true,
 			},
 			"ip_address": schema.StringAttribute{
 				Description: "The IP address of the device.",
@@ -138,8 +139,12 @@ func (r *DeviceResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	device := Device{
 		SiteID:    data.SiteID.ValueString(),
-		Name:      data.Name.ValueString(),
 		IPAddress: data.IPAddress.ValueString(),
+	}
+
+	if !data.Name.IsNull() {
+		name := data.Name.ValueString()
+		device.Name = &name
 	}
 
 	if !data.Description.IsNull() {
@@ -176,6 +181,10 @@ func (r *DeviceResource) Create(ctx context.Context, req resource.CreateRequest,
 	data.ID = types.StringValue(created.ID)
 	data.InsertedAt = types.StringValue(created.InsertedAt)
 
+	if created.Name != nil {
+		data.Name = types.StringValue(*created.Name)
+	}
+
 	if created.MonitoringEnabled != nil {
 		data.MonitoringEnabled = types.BoolValue(*created.MonitoringEnabled)
 	}
@@ -201,8 +210,13 @@ func (r *DeviceResource) Read(ctx context.Context, req resource.ReadRequest, res
 	}
 
 	data.SiteID = types.StringValue(device.SiteID)
-	data.Name = types.StringValue(device.Name)
 	data.IPAddress = types.StringValue(device.IPAddress)
+
+	if device.Name != nil {
+		data.Name = types.StringValue(*device.Name)
+	} else {
+		data.Name = types.StringNull()
+	}
 	data.InsertedAt = types.StringValue(device.InsertedAt)
 
 	if device.Description != nil {
@@ -240,8 +254,12 @@ func (r *DeviceResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	device := Device{
 		SiteID:    data.SiteID.ValueString(),
-		Name:      data.Name.ValueString(),
 		IPAddress: data.IPAddress.ValueString(),
+	}
+
+	if !data.Name.IsNull() {
+		name := data.Name.ValueString()
+		device.Name = &name
 	}
 
 	if !data.Description.IsNull() {
@@ -275,9 +293,11 @@ func (r *DeviceResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 
-	data.Name = types.StringValue(updated.Name)
 	data.IPAddress = types.StringValue(updated.IPAddress)
 
+	if updated.Name != nil {
+		data.Name = types.StringValue(*updated.Name)
+	}
 	if updated.Description != nil {
 		data.Description = types.StringValue(*updated.Description)
 	}

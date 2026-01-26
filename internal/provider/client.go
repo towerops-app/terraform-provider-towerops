@@ -42,7 +42,7 @@ type Site struct {
 type Device struct {
 	ID                   string  `json:"id,omitempty"`
 	SiteID               string  `json:"site_id"`
-	Name                 string  `json:"name"`
+	Name                 *string `json:"name,omitempty"`
 	IPAddress            string  `json:"ip_address"`
 	Description          *string `json:"description,omitempty"`
 	MonitoringEnabled    *bool   `json:"monitoring_enabled,omitempty"`
