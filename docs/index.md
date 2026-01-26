@@ -45,3 +45,7 @@ resource "towerops_device" "router" {
 ### Required
 
 - `token` (String, Sensitive) - The API token for authenticating with TowerOps.
+
+### Optional
+
+- `api_url` (String) - The base URL for the TowerOps API. Defaults to `https://towerops.net`.

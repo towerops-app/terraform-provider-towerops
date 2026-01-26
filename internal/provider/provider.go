@@ -19,7 +19,8 @@ type ToweropsProvider struct {
 
 // ToweropsProviderModel describes the provider data model.
 type ToweropsProviderModel struct {
-	Token types.String `tfsdk:"token"`
+	Token  types.String `tfsdk:"token"`
+	APIURL types.String `tfsdk:"api_url"`
 }
 
 // New creates a new provider instance.
@@ -44,6 +45,10 @@ func (p *ToweropsProvider) Schema(ctx context.Context, req provider.SchemaReques
 				Description: "The API token for authenticating with TowerOps. This token determines which organization's resources are accessible.",
 				Required:    true,
 				Sensitive:   true,
+			},
+			"api_url": schema.StringAttribute{
+				Description: "The base URL for the TowerOps API. Defaults to https://towerops.net.",
+				Optional:    true,
 			},
 		},
 	}
@@ -73,7 +78,7 @@ func (p *ToweropsProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
-	client := NewClient(config.Token.ValueString())
+	client := NewClient(config.Token.ValueString(), config.APIURL.ValueString())
 
 	resp.DataSourceData = client
 	resp.ResourceData = client

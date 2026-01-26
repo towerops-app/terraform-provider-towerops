@@ -30,6 +30,15 @@ provider "towerops" {
 }
 ```
 
+To use a custom API URL (e.g., for self-hosted or development):
+
+```hcl
+provider "towerops" {
+  token   = var.towerops_api_token
+  api_url = "https://custom.example.com"
+}
+```
+
 You can also set the token via environment variable:
 
 ```bash

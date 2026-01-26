@@ -19,9 +19,12 @@ type Client struct {
 }
 
 // NewClient creates a new TowerOps API client.
-func NewClient(token string) *Client {
+func NewClient(token, baseURL string) *Client {
+	if baseURL == "" {
+		baseURL = defaultBaseURL
+	}
 	return &Client{
-		BaseURL: defaultBaseURL,
+		BaseURL: baseURL,
 		Token:   token,
 		HTTPClient: &http.Client{
 			Timeout: 30 * time.Second,
