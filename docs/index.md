@@ -6,7 +6,7 @@ description: |-
 
 # TowerOps Provider
 
-The TowerOps provider allows you to manage [TowerOps](https://towerops.io) resources via Terraform.
+The TowerOps provider allows you to manage [TowerOps](https://towerops.net) resources via Terraform.
 
 ## Authentication
 

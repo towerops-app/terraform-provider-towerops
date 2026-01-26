@@ -1,6 +1,6 @@
 # TowerOps Terraform Provider
 
-Terraform provider for managing [TowerOps](https://towerops.io) resources.
+Terraform provider for managing [TowerOps](https://towerops.net) resources.
 
 ## Requirements
 
