@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -141,6 +142,11 @@ func (r *SiteResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 
 	site, err := r.client.GetSite(data.ID.ValueString())
 	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			// Site was deleted outside of Terraform, remove from state
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Failed to read site", err.Error())
 		return
 	}
@@ -187,6 +193,25 @@ func (r *SiteResource) Update(ctx context.Context, req resource.UpdateRequest, r
 
 	updated, err := r.client.UpdateSite(data.ID.ValueString(), site)
 	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			// Site was deleted outside of Terraform, recreate it
+			created, createErr := r.client.CreateSite(site)
+			if createErr != nil {
+				resp.Diagnostics.AddError("Failed to create site (after 404 on update)", createErr.Error())
+				return
+			}
+			data.ID = types.StringValue(created.ID)
+			data.InsertedAt = types.StringValue(created.InsertedAt)
+			data.Name = types.StringValue(created.Name)
+			if created.Location != nil {
+				data.Location = types.StringValue(*created.Location)
+			}
+			if created.SNMPCommunity != nil {
+				data.SNMPCommunity = types.StringValue(*created.SNMPCommunity)
+			}
+			resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+			return
+		}
 		resp.Diagnostics.AddError("Failed to update site", err.Error())
 		return
 	}

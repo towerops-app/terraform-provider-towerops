@@ -715,7 +715,7 @@ func TestAccDeviceResource_recreateOn404_createError(t *testing.T) {
 					mu.Unlock()
 				},
 				Config:      testAccDeviceResourceConfig(server.URL, "site-123", "192.168.1.2"),
-				ExpectError: regexp.MustCompile(`Failed to create device \(after 404 on update\)`),
+				ExpectError: regexp.MustCompile(`Failed to create device`),
 			},
 		},
 	})

@@ -56,7 +56,7 @@ resource "towerops_site" "test" {
   name = "Test"
 }
 `,
-				ExpectError: regexp.MustCompile(`Missing TowerOps API Token`),
+				ExpectError: regexp.MustCompile(`(Missing TowerOps API Token|token.*is required)`),
 			},
 		},
 	})

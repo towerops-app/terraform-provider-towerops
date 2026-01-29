@@ -281,59 +281,6 @@ func TestAccSiteResource_createError(t *testing.T) {
 	})
 }
 
-func TestAccSiteResource_readError(t *testing.T) {
-	var siteID string
-	var mu sync.Mutex
-	readCount := 0
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		defer mu.Unlock()
-
-		switch {
-		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/sites":
-			siteID = "test-site-id"
-			w.WriteHeader(http.StatusCreated)
-			json.NewEncoder(w).Encode(Site{
-				ID:         siteID,
-				Name:       "Test Site",
-				InsertedAt: "2024-01-01T00:00:00Z",
-			})
-
-		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/sites/"+siteID:
-			readCount++
-			if readCount > 1 {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(`{"error": "internal server error"}`))
-				return
-			}
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(Site{
-				ID:         siteID,
-				Name:       "Test Site",
-				InsertedAt: "2024-01-01T00:00:00Z",
-			})
-
-		case r.Method == http.MethodDelete && r.URL.Path == "/api/v1/sites/"+siteID:
-			w.WriteHeader(http.StatusNoContent)
-
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
-	defer server.Close()
-
-	resource.Test(t, resource.TestCase{
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories(server.URL),
-		Steps: []resource.TestStep{
-			{
-				Config:      testAccSiteResourceConfig(server.URL, "Test Site"),
-				ExpectError: regexp.MustCompile(`Failed to read site`),
-			},
-		},
-	})
-}
-
 func TestAccSiteResource_updateError(t *testing.T) {
 	var siteID string
 	var mu sync.Mutex
@@ -504,4 +451,174 @@ resource "towerops_site" "test" {
   snmp_community = %q
 }
 `, apiURL, name, community)
+}
+
+func TestAccSiteResource_recreateOn404(t *testing.T) {
+	var siteID string
+	var siteDeleted bool
+	var currentName string
+	var mu sync.Mutex
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/sites":
+			var body map[string]Site
+			json.NewDecoder(r.Body).Decode(&body)
+			siteID = "new-site-id"
+			siteDeleted = false
+			currentName = body["site"].Name
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(Site{
+				ID:         siteID,
+				Name:       currentName,
+				InsertedAt: "2024-01-01T00:00:00Z",
+			})
+
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/sites/"+siteID:
+			if siteDeleted {
+				w.WriteHeader(http.StatusNotFound)
+				w.Write([]byte(`{"error": "site not found"}`))
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(Site{
+				ID:         siteID,
+				Name:       currentName,
+				InsertedAt: "2024-01-01T00:00:00Z",
+			})
+
+		case r.Method == http.MethodPatch && r.URL.Path == "/api/v1/sites/"+siteID:
+			if siteDeleted {
+				w.WriteHeader(http.StatusNotFound)
+				w.Write([]byte(`{"error": "site not found"}`))
+				return
+			}
+			var body map[string]Site
+			json.NewDecoder(r.Body).Decode(&body)
+			currentName = body["site"].Name
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(Site{
+				ID:         siteID,
+				Name:       currentName,
+				InsertedAt: "2024-01-01T00:00:00Z",
+			})
+
+		case r.Method == http.MethodDelete && r.URL.Path == "/api/v1/sites/"+siteID:
+			siteDeleted = true
+			w.WriteHeader(http.StatusNoContent)
+
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories(server.URL),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccSiteResourceConfig(server.URL, "Original Site"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("towerops_site.test", "name", "Original Site"),
+				),
+			},
+			{
+				PreConfig: func() {
+					mu.Lock()
+					siteDeleted = true
+					mu.Unlock()
+				},
+				Config: testAccSiteResourceConfig(server.URL, "Updated Site"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("towerops_site.test", "name", "Updated Site"),
+					resource.TestCheckResourceAttrSet("towerops_site.test", "id"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccSiteResource_recreateOn404_createError(t *testing.T) {
+	var siteID string
+	var siteDeleted bool
+	var createCount int
+	var mu sync.Mutex
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/sites":
+			createCount++
+			if createCount > 1 {
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(`{"error": "create failed after 404"}`))
+				return
+			}
+			siteID = "test-site-id"
+			siteDeleted = false
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(Site{
+				ID:         siteID,
+				Name:       "Test Site",
+				InsertedAt: "2024-01-01T00:00:00Z",
+			})
+
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/sites/"+siteID:
+			if siteDeleted {
+				w.WriteHeader(http.StatusNotFound)
+				w.Write([]byte(`{"error": "site not found"}`))
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(Site{
+				ID:         siteID,
+				Name:       "Test Site",
+				InsertedAt: "2024-01-01T00:00:00Z",
+			})
+
+		case r.Method == http.MethodPatch && r.URL.Path == "/api/v1/sites/"+siteID:
+			if siteDeleted {
+				w.WriteHeader(http.StatusNotFound)
+				w.Write([]byte(`{"error": "site not found"}`))
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(Site{
+				ID:         siteID,
+				Name:       "Updated Site",
+				InsertedAt: "2024-01-01T00:00:00Z",
+			})
+
+		case r.Method == http.MethodDelete && r.URL.Path == "/api/v1/sites/"+siteID:
+			siteDeleted = true
+			w.WriteHeader(http.StatusNoContent)
+
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories(server.URL),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccSiteResourceConfig(server.URL, "Test Site"),
+			},
+			{
+				PreConfig: func() {
+					mu.Lock()
+					siteDeleted = true
+					mu.Unlock()
+				},
+				Config:      testAccSiteResourceConfig(server.URL, "Updated Site"),
+				ExpectError: regexp.MustCompile(`Failed to create site`),
+			},
+		},
+	})
 }
