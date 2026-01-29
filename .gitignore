@@ -2,3 +2,4 @@
 CLAUDE.md
 terraform-provider-towerops
 dist/
+coverage.out

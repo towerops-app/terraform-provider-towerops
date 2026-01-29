@@ -3,11 +3,15 @@ package provider
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
 )
+
+// ErrNotFound is returned when a resource is not found (404).
+var ErrNotFound = errors.New("resource not found")
 
 const defaultBaseURL = "https://towerops.net"
 
@@ -93,6 +97,9 @@ func (c *Client) doRequest(method, path string, body interface{}) ([]byte, error
 	}
 
 	if resp.StatusCode >= 400 {
+		if resp.StatusCode == http.StatusNotFound {
+			return nil, ErrNotFound
+		}
 		var apiErr APIError
 		if err := json.Unmarshal(respBody, &apiErr); err == nil {
 			if apiErr.Error != "" {

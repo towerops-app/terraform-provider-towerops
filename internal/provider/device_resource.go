@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -205,6 +206,11 @@ func (r *DeviceResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 	device, err := r.client.GetDevice(data.ID.ValueString())
 	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			// Device was deleted outside of Terraform, remove from state
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Failed to read device", err.Error())
 		return
 	}
@@ -289,6 +295,37 @@ func (r *DeviceResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	updated, err := r.client.UpdateDevice(data.ID.ValueString(), device)
 	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			// Device was deleted outside of Terraform, recreate it
+			created, createErr := r.client.CreateDevice(device)
+			if createErr != nil {
+				resp.Diagnostics.AddError("Failed to create device (after 404 on update)", createErr.Error())
+				return
+			}
+			data.ID = types.StringValue(created.ID)
+			data.InsertedAt = types.StringValue(created.InsertedAt)
+			data.IPAddress = types.StringValue(created.IPAddress)
+			if created.Name != nil {
+				data.Name = types.StringValue(*created.Name)
+			}
+			if created.Description != nil {
+				data.Description = types.StringValue(*created.Description)
+			}
+			if created.MonitoringEnabled != nil {
+				data.MonitoringEnabled = types.BoolValue(*created.MonitoringEnabled)
+			}
+			if created.SNMPEnabled != nil {
+				data.SNMPEnabled = types.BoolValue(*created.SNMPEnabled)
+			}
+			if created.SNMPVersion != nil {
+				data.SNMPVersion = types.StringValue(*created.SNMPVersion)
+			}
+			if created.SNMPPort != nil {
+				data.SNMPPort = types.Int64Value(int64(*created.SNMPPort))
+			}
+			resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+			return
+		}
 		resp.Diagnostics.AddError("Failed to update device", err.Error())
 		return
 	}
