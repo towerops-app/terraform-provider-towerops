@@ -48,7 +48,8 @@ type Site struct {
 // Device represents a TowerOps device.
 type Device struct {
 	ID                   string  `json:"id,omitempty"`
-	SiteID               string  `json:"site_id"`
+	SiteID               *string `json:"site_id,omitempty"`
+	OrganizationID       *string `json:"organization_id,omitempty"`
 	Name                 *string `json:"name,omitempty"`
 	IPAddress            string  `json:"ip_address"`
 	Description          *string `json:"description,omitempty"`
@@ -57,7 +58,14 @@ type Device struct {
 	SNMPVersion          *string `json:"snmp_version,omitempty"`
 	SNMPPort             *int    `json:"snmp_port,omitempty"`
 	CheckIntervalSeconds *int    `json:"check_interval_seconds,omitempty"`
-	InsertedAt           string  `json:"inserted_at,omitempty"`
+	// SNMPv3 fields
+	SNMPv3SecurityLevel *string `json:"snmpv3_security_level,omitempty"`
+	SNMPv3Username      *string `json:"snmpv3_username,omitempty"`
+	SNMPv3AuthProtocol  *string `json:"snmpv3_auth_protocol,omitempty"`
+	SNMPv3AuthPassword  *string `json:"snmpv3_auth_password,omitempty"`
+	SNMPv3PrivProtocol  *string `json:"snmpv3_priv_protocol,omitempty"`
+	SNMPv3PrivPassword  *string `json:"snmpv3_priv_password,omitempty"`
+	InsertedAt          string  `json:"inserted_at,omitempty"`
 }
 
 // APIError represents an error response from the API.

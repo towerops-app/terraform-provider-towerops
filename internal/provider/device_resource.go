@@ -26,16 +26,23 @@ type DeviceResource struct {
 
 // DeviceResourceModel describes the resource data model.
 type DeviceResourceModel struct {
-	ID                types.String `tfsdk:"id"`
-	SiteID            types.String `tfsdk:"site_id"`
-	Name              types.String `tfsdk:"name"`
-	IPAddress         types.String `tfsdk:"ip_address"`
-	Description       types.String `tfsdk:"description"`
-	MonitoringEnabled types.Bool   `tfsdk:"monitoring_enabled"`
-	SNMPEnabled       types.Bool   `tfsdk:"snmp_enabled"`
-	SNMPVersion       types.String `tfsdk:"snmp_version"`
-	SNMPPort          types.Int64  `tfsdk:"snmp_port"`
-	InsertedAt        types.String `tfsdk:"inserted_at"`
+	ID                   types.String `tfsdk:"id"`
+	SiteID               types.String `tfsdk:"site_id"`
+	OrganizationID       types.String `tfsdk:"organization_id"`
+	Name                 types.String `tfsdk:"name"`
+	IPAddress            types.String `tfsdk:"ip_address"`
+	Description          types.String `tfsdk:"description"`
+	MonitoringEnabled    types.Bool   `tfsdk:"monitoring_enabled"`
+	SNMPEnabled          types.Bool   `tfsdk:"snmp_enabled"`
+	SNMPVersion          types.String `tfsdk:"snmp_version"`
+	SNMPPort             types.Int64  `tfsdk:"snmp_port"`
+	SNMPv3SecurityLevel  types.String `tfsdk:"snmpv3_security_level"`
+	SNMPv3Username       types.String `tfsdk:"snmpv3_username"`
+	SNMPv3AuthProtocol   types.String `tfsdk:"snmpv3_auth_protocol"`
+	SNMPv3AuthPassword   types.String `tfsdk:"snmpv3_auth_password"`
+	SNMPv3PrivProtocol   types.String `tfsdk:"snmpv3_priv_protocol"`
+	SNMPv3PrivPassword   types.String `tfsdk:"snmpv3_priv_password"`
+	InsertedAt           types.String `tfsdk:"inserted_at"`
 }
 
 // NewDeviceResource creates a new device resource.
@@ -49,7 +56,7 @@ func (r *DeviceResource) Metadata(ctx context.Context, req resource.MetadataRequ
 
 func (r *DeviceResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Manages a TowerOps device. Devices represent network equipment at a site.",
+		Description: "Manages a TowerOps device. Devices represent network equipment at a site or directly in an organization.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description: "The unique identifier of the device.",
@@ -59,8 +66,17 @@ func (r *DeviceResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				},
 			},
 			"site_id": schema.StringAttribute{
-				Description: "The ID of the site this device belongs to.",
-				Required:    true,
+				Description: "The ID of the site this device belongs to. Optional if organization_id is provided.",
+				Optional:    true,
+				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"organization_id": schema.StringAttribute{
+				Description: "The ID of the organization this device belongs to. Required if site_id is not provided.",
+				Optional:    true,
+				Computed:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -102,6 +118,32 @@ func (r *DeviceResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Computed:    true,
 				Default:     int64default.StaticInt64(161),
 			},
+			"snmpv3_security_level": schema.StringAttribute{
+				Description: "SNMPv3 security level (noAuthNoPriv, authNoPriv, or authPriv). Only used when snmp_version is '3'.",
+				Optional:    true,
+			},
+			"snmpv3_username": schema.StringAttribute{
+				Description: "SNMPv3 username. Only used when snmp_version is '3'.",
+				Optional:    true,
+			},
+			"snmpv3_auth_protocol": schema.StringAttribute{
+				Description: "SNMPv3 authentication protocol (MD5, SHA, SHA-224, SHA-256, SHA-384, SHA-512). Only used when snmp_version is '3'.",
+				Optional:    true,
+			},
+			"snmpv3_auth_password": schema.StringAttribute{
+				Description: "SNMPv3 authentication password. Only used when snmp_version is '3'.",
+				Optional:    true,
+				Sensitive:   true,
+			},
+			"snmpv3_priv_protocol": schema.StringAttribute{
+				Description: "SNMPv3 privacy protocol (DES, AES, AES-192, AES-256). Only used when snmp_version is '3'.",
+				Optional:    true,
+			},
+			"snmpv3_priv_password": schema.StringAttribute{
+				Description: "SNMPv3 privacy password. Only used when snmp_version is '3'.",
+				Optional:    true,
+				Sensitive:   true,
+			},
 			"inserted_at": schema.StringAttribute{
 				Description: "The timestamp when the device was created.",
 				Computed:    true,
@@ -139,8 +181,17 @@ func (r *DeviceResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 
 	device := Device{
-		SiteID:    data.SiteID.ValueString(),
 		IPAddress: data.IPAddress.ValueString(),
+	}
+
+	if !data.SiteID.IsNull() {
+		siteID := data.SiteID.ValueString()
+		device.SiteID = &siteID
+	}
+
+	if !data.OrganizationID.IsNull() {
+		orgID := data.OrganizationID.ValueString()
+		device.OrganizationID = &orgID
 	}
 
 	if !data.Name.IsNull() {
@@ -173,6 +224,37 @@ func (r *DeviceResource) Create(ctx context.Context, req resource.CreateRequest,
 		device.SNMPPort = &port
 	}
 
+	// SNMPv3 fields
+	if !data.SNMPv3SecurityLevel.IsNull() {
+		level := data.SNMPv3SecurityLevel.ValueString()
+		device.SNMPv3SecurityLevel = &level
+	}
+
+	if !data.SNMPv3Username.IsNull() {
+		username := data.SNMPv3Username.ValueString()
+		device.SNMPv3Username = &username
+	}
+
+	if !data.SNMPv3AuthProtocol.IsNull() {
+		protocol := data.SNMPv3AuthProtocol.ValueString()
+		device.SNMPv3AuthProtocol = &protocol
+	}
+
+	if !data.SNMPv3AuthPassword.IsNull() {
+		password := data.SNMPv3AuthPassword.ValueString()
+		device.SNMPv3AuthPassword = &password
+	}
+
+	if !data.SNMPv3PrivProtocol.IsNull() {
+		protocol := data.SNMPv3PrivProtocol.ValueString()
+		device.SNMPv3PrivProtocol = &protocol
+	}
+
+	if !data.SNMPv3PrivPassword.IsNull() {
+		password := data.SNMPv3PrivPassword.ValueString()
+		device.SNMPv3PrivPassword = &password
+	}
+
 	created, err := r.client.CreateDevice(device)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create device", err.Error())
@@ -181,6 +263,18 @@ func (r *DeviceResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	data.ID = types.StringValue(created.ID)
 	data.InsertedAt = types.StringValue(created.InsertedAt)
+
+	if created.SiteID != nil {
+		data.SiteID = types.StringValue(*created.SiteID)
+	} else {
+		data.SiteID = types.StringNull()
+	}
+
+	if created.OrganizationID != nil {
+		data.OrganizationID = types.StringValue(*created.OrganizationID)
+	} else {
+		data.OrganizationID = types.StringNull()
+	}
 
 	if created.Name != nil {
 		data.Name = types.StringValue(*created.Name)
@@ -215,7 +309,18 @@ func (r *DeviceResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	data.SiteID = types.StringValue(device.SiteID)
+	if device.SiteID != nil {
+		data.SiteID = types.StringValue(*device.SiteID)
+	} else {
+		data.SiteID = types.StringNull()
+	}
+
+	if device.OrganizationID != nil {
+		data.OrganizationID = types.StringValue(*device.OrganizationID)
+	} else {
+		data.OrganizationID = types.StringNull()
+	}
+
 	data.IPAddress = types.StringValue(device.IPAddress)
 
 	if device.Name != nil {
@@ -247,6 +352,43 @@ func (r *DeviceResource) Read(ctx context.Context, req resource.ReadRequest, res
 		data.SNMPPort = types.Int64Value(int64(*device.SNMPPort))
 	}
 
+	// SNMPv3 fields
+	if device.SNMPv3SecurityLevel != nil {
+		data.SNMPv3SecurityLevel = types.StringValue(*device.SNMPv3SecurityLevel)
+	} else {
+		data.SNMPv3SecurityLevel = types.StringNull()
+	}
+
+	if device.SNMPv3Username != nil {
+		data.SNMPv3Username = types.StringValue(*device.SNMPv3Username)
+	} else {
+		data.SNMPv3Username = types.StringNull()
+	}
+
+	if device.SNMPv3AuthProtocol != nil {
+		data.SNMPv3AuthProtocol = types.StringValue(*device.SNMPv3AuthProtocol)
+	} else {
+		data.SNMPv3AuthProtocol = types.StringNull()
+	}
+
+	if device.SNMPv3AuthPassword != nil {
+		data.SNMPv3AuthPassword = types.StringValue(*device.SNMPv3AuthPassword)
+	} else {
+		data.SNMPv3AuthPassword = types.StringNull()
+	}
+
+	if device.SNMPv3PrivProtocol != nil {
+		data.SNMPv3PrivProtocol = types.StringValue(*device.SNMPv3PrivProtocol)
+	} else {
+		data.SNMPv3PrivProtocol = types.StringNull()
+	}
+
+	if device.SNMPv3PrivPassword != nil {
+		data.SNMPv3PrivPassword = types.StringValue(*device.SNMPv3PrivPassword)
+	} else {
+		data.SNMPv3PrivPassword = types.StringNull()
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -259,8 +401,17 @@ func (r *DeviceResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 
 	device := Device{
-		SiteID:    data.SiteID.ValueString(),
 		IPAddress: data.IPAddress.ValueString(),
+	}
+
+	if !data.SiteID.IsNull() {
+		siteID := data.SiteID.ValueString()
+		device.SiteID = &siteID
+	}
+
+	if !data.OrganizationID.IsNull() {
+		orgID := data.OrganizationID.ValueString()
+		device.OrganizationID = &orgID
 	}
 
 	if !data.Name.IsNull() {
@@ -293,6 +444,37 @@ func (r *DeviceResource) Update(ctx context.Context, req resource.UpdateRequest,
 		device.SNMPPort = &port
 	}
 
+	// SNMPv3 fields
+	if !data.SNMPv3SecurityLevel.IsNull() {
+		level := data.SNMPv3SecurityLevel.ValueString()
+		device.SNMPv3SecurityLevel = &level
+	}
+
+	if !data.SNMPv3Username.IsNull() {
+		username := data.SNMPv3Username.ValueString()
+		device.SNMPv3Username = &username
+	}
+
+	if !data.SNMPv3AuthProtocol.IsNull() {
+		protocol := data.SNMPv3AuthProtocol.ValueString()
+		device.SNMPv3AuthProtocol = &protocol
+	}
+
+	if !data.SNMPv3AuthPassword.IsNull() {
+		password := data.SNMPv3AuthPassword.ValueString()
+		device.SNMPv3AuthPassword = &password
+	}
+
+	if !data.SNMPv3PrivProtocol.IsNull() {
+		protocol := data.SNMPv3PrivProtocol.ValueString()
+		device.SNMPv3PrivProtocol = &protocol
+	}
+
+	if !data.SNMPv3PrivPassword.IsNull() {
+		password := data.SNMPv3PrivPassword.ValueString()
+		device.SNMPv3PrivPassword = &password
+	}
+
 	updated, err := r.client.UpdateDevice(data.ID.ValueString(), device)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -305,6 +487,19 @@ func (r *DeviceResource) Update(ctx context.Context, req resource.UpdateRequest,
 			data.ID = types.StringValue(created.ID)
 			data.InsertedAt = types.StringValue(created.InsertedAt)
 			data.IPAddress = types.StringValue(created.IPAddress)
+
+			if created.SiteID != nil {
+				data.SiteID = types.StringValue(*created.SiteID)
+			} else {
+				data.SiteID = types.StringNull()
+			}
+
+			if created.OrganizationID != nil {
+				data.OrganizationID = types.StringValue(*created.OrganizationID)
+			} else {
+				data.OrganizationID = types.StringNull()
+			}
+
 			if created.Name != nil {
 				data.Name = types.StringValue(*created.Name)
 			}
@@ -332,6 +527,18 @@ func (r *DeviceResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	data.IPAddress = types.StringValue(updated.IPAddress)
 
+	if updated.SiteID != nil {
+		data.SiteID = types.StringValue(*updated.SiteID)
+	} else {
+		data.SiteID = types.StringNull()
+	}
+
+	if updated.OrganizationID != nil {
+		data.OrganizationID = types.StringValue(*updated.OrganizationID)
+	} else {
+		data.OrganizationID = types.StringNull()
+	}
+
 	if updated.Name != nil {
 		data.Name = types.StringValue(*updated.Name)
 	}
@@ -349,6 +556,43 @@ func (r *DeviceResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 	if updated.SNMPPort != nil {
 		data.SNMPPort = types.Int64Value(int64(*updated.SNMPPort))
+	}
+
+	// SNMPv3 fields
+	if updated.SNMPv3SecurityLevel != nil {
+		data.SNMPv3SecurityLevel = types.StringValue(*updated.SNMPv3SecurityLevel)
+	} else {
+		data.SNMPv3SecurityLevel = types.StringNull()
+	}
+
+	if updated.SNMPv3Username != nil {
+		data.SNMPv3Username = types.StringValue(*updated.SNMPv3Username)
+	} else {
+		data.SNMPv3Username = types.StringNull()
+	}
+
+	if updated.SNMPv3AuthProtocol != nil {
+		data.SNMPv3AuthProtocol = types.StringValue(*updated.SNMPv3AuthProtocol)
+	} else {
+		data.SNMPv3AuthProtocol = types.StringNull()
+	}
+
+	if updated.SNMPv3AuthPassword != nil {
+		data.SNMPv3AuthPassword = types.StringValue(*updated.SNMPv3AuthPassword)
+	} else {
+		data.SNMPv3AuthPassword = types.StringNull()
+	}
+
+	if updated.SNMPv3PrivProtocol != nil {
+		data.SNMPv3PrivProtocol = types.StringValue(*updated.SNMPv3PrivProtocol)
+	} else {
+		data.SNMPv3PrivProtocol = types.StringNull()
+	}
+
+	if updated.SNMPv3PrivPassword != nil {
+		data.SNMPv3PrivPassword = types.StringValue(*updated.SNMPv3PrivPassword)
+	} else {
+		data.SNMPv3PrivPassword = types.StringNull()
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
