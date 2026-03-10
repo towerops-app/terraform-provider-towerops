@@ -16,6 +16,12 @@ provider "towerops" {
   token = var.towerops_api_token
 }
 
+# Manage organization settings
+resource "towerops_organization" "main" {
+  name      = "My Organization"
+  use_sites = true
+}
+
 # Create a site
 resource "towerops_site" "main_office" {
   name           = "Main Office"
