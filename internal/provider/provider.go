@@ -86,6 +86,7 @@ func (p *ToweropsProvider) Configure(ctx context.Context, req provider.Configure
 
 func (p *ToweropsProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
+		NewOrganizationResource,
 		NewSiteResource,
 		NewDeviceResource,
 	}

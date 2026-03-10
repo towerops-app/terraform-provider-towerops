@@ -68,6 +68,19 @@ type Device struct {
 	InsertedAt          string  `json:"inserted_at,omitempty"`
 }
 
+// Organization represents a TowerOps organization.
+type Organization struct {
+	ID       string `json:"id,omitempty"`
+	Name     string `json:"name,omitempty"`
+	Slug     string `json:"slug,omitempty"`
+	UseSites bool   `json:"use_sites"`
+}
+
+// organizationResponse wraps the API response for organization endpoints.
+type organizationResponse struct {
+	Data Organization `json:"data"`
+}
+
 // APIError represents an error response from the API.
 type APIError struct {
 	Error  string            `json:"error,omitempty"`
@@ -227,4 +240,35 @@ func (c *Client) UpdateDevice(id string, device Device) (*Device, error) {
 func (c *Client) DeleteDevice(id string) error {
 	_, err := c.doRequest(http.MethodDelete, "/api/v1/devices/"+id, nil)
 	return err
+}
+
+// GetOrganization retrieves the current organization settings.
+func (c *Client) GetOrganization() (*Organization, error) {
+	respBody, err := c.doRequest(http.MethodGet, "/api/v1/organization", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var result organizationResponse
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &result.Data, nil
+}
+
+// UpdateOrganization updates the current organization settings.
+func (c *Client) UpdateOrganization(org Organization) (*Organization, error) {
+	body := map[string]Organization{"organization": org}
+	respBody, err := c.doRequest(http.MethodPatch, "/api/v1/organization", body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result organizationResponse
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &result.Data, nil
 }

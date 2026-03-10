@@ -29,7 +29,7 @@ func TestAccDeviceResource_basic(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 			json.NewEncoder(w).Encode(Device{
 				ID:                deviceID,
-				SiteID:            "site-123",
+				SiteID:            strPtr("site-123"),
 				Name:              &name,
 				IPAddress:         "192.168.1.1",
 				MonitoringEnabled: &monitoringEnabled,
@@ -42,7 +42,7 @@ func TestAccDeviceResource_basic(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(Device{
 				ID:                deviceID,
-				SiteID:            "site-123",
+				SiteID:            strPtr("site-123"),
 				Name:              &name,
 				IPAddress:         "192.168.1.1",
 				MonitoringEnabled: &monitoringEnabled,
@@ -95,7 +95,7 @@ func TestAccDeviceResource_withAllAttributes(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 			json.NewEncoder(w).Encode(Device{
 				ID:                deviceID,
-				SiteID:            "site-123",
+				SiteID:            strPtr("site-123"),
 				Name:              &name,
 				IPAddress:         "10.0.0.1",
 				Description:       &description,
@@ -111,7 +111,7 @@ func TestAccDeviceResource_withAllAttributes(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(Device{
 				ID:                deviceID,
-				SiteID:            "site-123",
+				SiteID:            strPtr("site-123"),
 				Name:              &name,
 				IPAddress:         "10.0.0.1",
 				Description:       &description,
@@ -170,7 +170,7 @@ func TestAccDeviceResource_update(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 			json.NewEncoder(w).Encode(Device{
 				ID:                deviceID,
-				SiteID:            "site-123",
+				SiteID:            strPtr("site-123"),
 				Name:              &name,
 				IPAddress:         currentIP,
 				MonitoringEnabled: &monitoringEnabled,
@@ -183,7 +183,7 @@ func TestAccDeviceResource_update(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(Device{
 				ID:                deviceID,
-				SiteID:            "site-123",
+				SiteID:            strPtr("site-123"),
 				Name:              &name,
 				IPAddress:         currentIP,
 				MonitoringEnabled: &monitoringEnabled,
@@ -199,7 +199,7 @@ func TestAccDeviceResource_update(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(Device{
 				ID:                deviceID,
-				SiteID:            "site-123",
+				SiteID:            strPtr("site-123"),
 				Name:              &name,
 				IPAddress:         currentIP,
 				MonitoringEnabled: &monitoringEnabled,
@@ -260,7 +260,7 @@ func TestAccDeviceResource_recreateOn404(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 			json.NewEncoder(w).Encode(Device{
 				ID:                deviceID,
-				SiteID:            "site-123",
+				SiteID:            strPtr("site-123"),
 				Name:              &name,
 				IPAddress:         currentIP,
 				MonitoringEnabled: &monitoringEnabled,
@@ -280,7 +280,7 @@ func TestAccDeviceResource_recreateOn404(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(Device{
 				ID:                deviceID,
-				SiteID:            "site-123",
+				SiteID:            strPtr("site-123"),
 				Name:              &name,
 				IPAddress:         currentIP,
 				MonitoringEnabled: &monitoringEnabled,
@@ -303,7 +303,7 @@ func TestAccDeviceResource_recreateOn404(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(Device{
 				ID:                deviceID,
-				SiteID:            "site-123",
+				SiteID:            strPtr("site-123"),
 				Name:              &name,
 				IPAddress:         currentIP,
 				MonitoringEnabled: &monitoringEnabled,
@@ -367,7 +367,7 @@ func TestAccDeviceResource_importState(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 			json.NewEncoder(w).Encode(Device{
 				ID:                deviceID,
-				SiteID:            "site-123",
+				SiteID:            strPtr("site-123"),
 				Name:              &name,
 				IPAddress:         "192.168.1.1",
 				MonitoringEnabled: &monitoringEnabled,
@@ -382,7 +382,7 @@ func TestAccDeviceResource_importState(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(Device{
 				ID:                "imported-device-id",
-				SiteID:            "site-123",
+				SiteID:            strPtr("site-123"),
 				Name:              &name,
 				IPAddress:         "192.168.1.1",
 				MonitoringEnabled: &monitoringEnabled,
@@ -491,7 +491,7 @@ func TestAccDeviceResource_updateError(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 			json.NewEncoder(w).Encode(Device{
 				ID:                deviceID,
-				SiteID:            "site-123",
+				SiteID:            strPtr("site-123"),
 				Name:              &name,
 				IPAddress:         "192.168.1.1",
 				MonitoringEnabled: &monitoringEnabled,
@@ -506,7 +506,7 @@ func TestAccDeviceResource_updateError(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(Device{
 				ID:                deviceID,
-				SiteID:            "site-123",
+				SiteID:            strPtr("site-123"),
 				Name:              &name,
 				IPAddress:         "192.168.1.1",
 				MonitoringEnabled: &monitoringEnabled,
@@ -562,7 +562,7 @@ func TestAccDeviceResource_deleteError(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 			json.NewEncoder(w).Encode(Device{
 				ID:                deviceID,
-				SiteID:            "site-123",
+				SiteID:            strPtr("site-123"),
 				Name:              &name,
 				IPAddress:         "192.168.1.1",
 				MonitoringEnabled: &monitoringEnabled,
@@ -577,7 +577,7 @@ func TestAccDeviceResource_deleteError(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(Device{
 				ID:                deviceID,
-				SiteID:            "site-123",
+				SiteID:            strPtr("site-123"),
 				Name:              &name,
 				IPAddress:         "192.168.1.1",
 				MonitoringEnabled: &monitoringEnabled,
@@ -642,7 +642,7 @@ func TestAccDeviceResource_recreateOn404_createError(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 			json.NewEncoder(w).Encode(Device{
 				ID:                deviceID,
-				SiteID:            "site-123",
+				SiteID:            strPtr("site-123"),
 				Name:              &name,
 				IPAddress:         "192.168.1.1",
 				MonitoringEnabled: &monitoringEnabled,
@@ -662,7 +662,7 @@ func TestAccDeviceResource_recreateOn404_createError(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(Device{
 				ID:                deviceID,
-				SiteID:            "site-123",
+				SiteID:            strPtr("site-123"),
 				Name:              &name,
 				IPAddress:         "192.168.1.1",
 				MonitoringEnabled: &monitoringEnabled,
@@ -682,7 +682,7 @@ func TestAccDeviceResource_recreateOn404_createError(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(Device{
 				ID:                deviceID,
-				SiteID:            "site-123",
+				SiteID:            strPtr("site-123"),
 				Name:              &name,
 				IPAddress:         "192.168.1.2",
 				MonitoringEnabled: &monitoringEnabled,

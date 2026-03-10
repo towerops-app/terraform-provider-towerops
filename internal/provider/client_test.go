@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+func strPtr(s string) *string { return &s }
+
 func TestClient_ErrNotFound(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -59,8 +61,8 @@ func TestClient_GetDevice_Success(t *testing.T) {
 	if device.ID != "device-123" {
 		t.Errorf("expected ID device-123, got %s", device.ID)
 	}
-	if device.SiteID != "site-456" {
-		t.Errorf("expected SiteID site-456, got %s", device.SiteID)
+	if device.SiteID == nil || *device.SiteID != "site-456" {
+		t.Errorf("expected SiteID site-456, got %v", device.SiteID)
 	}
 	if device.IPAddress != "192.168.1.1" {
 		t.Errorf("expected IPAddress 192.168.1.1, got %s", device.IPAddress)
@@ -92,7 +94,7 @@ func TestClient_CreateDevice_Success(t *testing.T) {
 	client := NewClient("test-token", server.URL)
 
 	device := Device{
-		SiteID:    "site-456",
+		SiteID:    strPtr("site-456"),
 		IPAddress: "192.168.1.100",
 	}
 
@@ -129,7 +131,7 @@ func TestClient_UpdateDevice_Success(t *testing.T) {
 	client := NewClient("test-token", server.URL)
 
 	device := Device{
-		SiteID:    "site-456",
+		SiteID:    strPtr("site-456"),
 		IPAddress: "192.168.1.200",
 	}
 
@@ -153,7 +155,7 @@ func TestClient_UpdateDevice_NotFound(t *testing.T) {
 	client := NewClient("test-token", server.URL)
 
 	device := Device{
-		SiteID:    "site-456",
+		SiteID:    strPtr("site-456"),
 		IPAddress: "192.168.1.200",
 	}
 
@@ -218,7 +220,7 @@ func TestClient_ValidationError(t *testing.T) {
 	client := NewClient("test-token", server.URL)
 
 	device := Device{
-		SiteID:    "site-456",
+		SiteID:    strPtr("site-456"),
 		IPAddress: "invalid",
 	}
 
@@ -521,7 +523,7 @@ func TestClient_CreateDevice_InvalidJSON(t *testing.T) {
 
 	client := NewClient("test-token", server.URL)
 
-	device := Device{SiteID: "site-123", IPAddress: "192.168.1.1"}
+	device := Device{SiteID: strPtr("site-123"), IPAddress: "192.168.1.1"}
 	_, err := client.CreateDevice(device)
 	if err == nil {
 		t.Fatal("expected error for invalid JSON, got nil")
@@ -537,7 +539,7 @@ func TestClient_UpdateDevice_InvalidJSON(t *testing.T) {
 
 	client := NewClient("test-token", server.URL)
 
-	device := Device{SiteID: "site-123", IPAddress: "192.168.1.1"}
+	device := Device{SiteID: strPtr("site-123"), IPAddress: "192.168.1.1"}
 	_, err := client.UpdateDevice("device-123", device)
 	if err == nil {
 		t.Fatal("expected error for invalid JSON, got nil")
