@@ -70,10 +70,11 @@ type Device struct {
 
 // Organization represents a TowerOps organization.
 type Organization struct {
-	ID       string `json:"id,omitempty"`
-	Name     string `json:"name,omitempty"`
-	Slug     string `json:"slug,omitempty"`
-	UseSites bool   `json:"use_sites"`
+	ID            string `json:"id,omitempty"`
+	Name          string `json:"name,omitempty"`
+	Slug          string `json:"slug,omitempty"`
+	UseSites      bool   `json:"use_sites"`
+	SnmpCommunity string `json:"snmp_community,omitempty"`
 }
 
 // organizationResponse wraps the API response for organization endpoints.

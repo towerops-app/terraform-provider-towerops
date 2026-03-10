@@ -20,10 +20,11 @@ type OrganizationResource struct {
 
 // OrganizationResourceModel describes the resource data model.
 type OrganizationResourceModel struct {
-	ID       types.String `tfsdk:"id"`
-	Name     types.String `tfsdk:"name"`
-	Slug     types.String `tfsdk:"slug"`
-	UseSites types.Bool   `tfsdk:"use_sites"`
+	ID            types.String `tfsdk:"id"`
+	Name          types.String `tfsdk:"name"`
+	Slug          types.String `tfsdk:"slug"`
+	UseSites      types.Bool   `tfsdk:"use_sites"`
+	SnmpCommunity types.String `tfsdk:"snmp_community"`
 }
 
 // NewOrganizationResource creates a new organization resource.
@@ -58,6 +59,11 @@ func (r *OrganizationResource) Schema(ctx context.Context, req resource.SchemaRe
 			"use_sites": schema.BoolAttribute{
 				Description: "Whether the organization uses sites to group devices. When true, devices are organized under sites. When false, devices belong directly to the organization.",
 				Required:    true,
+			},
+			"snmp_community": schema.StringAttribute{
+				Description: "Default SNMP community string for devices. Can only be set by organization owners.",
+				Optional:    true,
+				Sensitive:   true,
 			},
 		},
 	}
@@ -97,6 +103,11 @@ func (r *OrganizationResource) Create(ctx context.Context, req resource.CreateRe
 		org.Name = data.Name.ValueString()
 	}
 
+	// Include SNMP community if provided
+	if !data.SnmpCommunity.IsNull() && !data.SnmpCommunity.IsUnknown() {
+		org.SnmpCommunity = data.SnmpCommunity.ValueString()
+	}
+
 	updated, err := r.client.UpdateOrganization(org)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to update organization", err.Error())
@@ -107,6 +118,7 @@ func (r *OrganizationResource) Create(ctx context.Context, req resource.CreateRe
 	data.Name = types.StringValue(updated.Name)
 	data.Slug = types.StringValue(updated.Slug)
 	data.UseSites = types.BoolValue(updated.UseSites)
+	data.SnmpCommunity = types.StringValue(updated.SnmpCommunity)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -150,6 +162,11 @@ func (r *OrganizationResource) Update(ctx context.Context, req resource.UpdateRe
 		org.Name = data.Name.ValueString()
 	}
 
+	// Include SNMP community if provided
+	if !data.SnmpCommunity.IsNull() && !data.SnmpCommunity.IsUnknown() {
+		org.SnmpCommunity = data.SnmpCommunity.ValueString()
+	}
+
 	updated, err := r.client.UpdateOrganization(org)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to update organization", err.Error())
@@ -160,6 +177,7 @@ func (r *OrganizationResource) Update(ctx context.Context, req resource.UpdateRe
 	data.Name = types.StringValue(updated.Name)
 	data.Slug = types.StringValue(updated.Slug)
 	data.UseSites = types.BoolValue(updated.UseSites)
+	data.SnmpCommunity = types.StringValue(updated.SnmpCommunity)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
