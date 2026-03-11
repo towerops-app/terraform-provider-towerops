@@ -89,6 +89,8 @@ func (p *ToweropsProvider) Resources(ctx context.Context) []func() resource.Reso
 		NewOrganizationResource,
 		NewSiteResource,
 		NewDeviceResource,
+		NewScheduleResource,
+		NewEscalationPolicyResource,
 	}
 }
 

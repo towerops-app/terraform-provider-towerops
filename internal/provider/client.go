@@ -243,6 +243,130 @@ func (c *Client) DeleteDevice(id string) error {
 	return err
 }
 
+// OnCallSchedule represents a TowerOps on-call schedule.
+type OnCallSchedule struct {
+	ID          string  `json:"id,omitempty"`
+	Name        string  `json:"name"`
+	Description *string `json:"description,omitempty"`
+	Timezone    string  `json:"timezone"`
+	InsertedAt  string  `json:"inserted_at,omitempty"`
+}
+
+// CreateSchedule creates a new on-call schedule.
+func (c *Client) CreateSchedule(schedule OnCallSchedule) (*OnCallSchedule, error) {
+	body := map[string]OnCallSchedule{"schedule": schedule}
+	respBody, err := c.doRequest(http.MethodPost, "/api/v1/schedules", body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result OnCallSchedule
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GetSchedule retrieves an on-call schedule by ID.
+func (c *Client) GetSchedule(id string) (*OnCallSchedule, error) {
+	respBody, err := c.doRequest(http.MethodGet, "/api/v1/schedules/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var result OnCallSchedule
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// UpdateSchedule updates an existing on-call schedule.
+func (c *Client) UpdateSchedule(id string, schedule OnCallSchedule) (*OnCallSchedule, error) {
+	body := map[string]OnCallSchedule{"schedule": schedule}
+	respBody, err := c.doRequest(http.MethodPatch, "/api/v1/schedules/"+id, body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result OnCallSchedule
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeleteSchedule deletes an on-call schedule.
+func (c *Client) DeleteSchedule(id string) error {
+	_, err := c.doRequest(http.MethodDelete, "/api/v1/schedules/"+id, nil)
+	return err
+}
+
+// EscalationPolicyAPI represents a TowerOps escalation policy.
+type EscalationPolicyAPI struct {
+	ID          string  `json:"id,omitempty"`
+	Name        string  `json:"name"`
+	Description *string `json:"description,omitempty"`
+	RepeatCount *int    `json:"repeat_count,omitempty"`
+	InsertedAt  string  `json:"inserted_at,omitempty"`
+}
+
+// CreateEscalationPolicy creates a new escalation policy.
+func (c *Client) CreateEscalationPolicy(policy EscalationPolicyAPI) (*EscalationPolicyAPI, error) {
+	body := map[string]EscalationPolicyAPI{"escalation_policy": policy}
+	respBody, err := c.doRequest(http.MethodPost, "/api/v1/escalation_policies", body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result EscalationPolicyAPI
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GetEscalationPolicy retrieves an escalation policy by ID.
+func (c *Client) GetEscalationPolicy(id string) (*EscalationPolicyAPI, error) {
+	respBody, err := c.doRequest(http.MethodGet, "/api/v1/escalation_policies/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var result EscalationPolicyAPI
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// UpdateEscalationPolicy updates an existing escalation policy.
+func (c *Client) UpdateEscalationPolicy(id string, policy EscalationPolicyAPI) (*EscalationPolicyAPI, error) {
+	body := map[string]EscalationPolicyAPI{"escalation_policy": policy}
+	respBody, err := c.doRequest(http.MethodPatch, "/api/v1/escalation_policies/"+id, body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result EscalationPolicyAPI
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeleteEscalationPolicy deletes an escalation policy.
+func (c *Client) DeleteEscalationPolicy(id string) error {
+	_, err := c.doRequest(http.MethodDelete, "/api/v1/escalation_policies/"+id, nil)
+	return err
+}
+
 // GetOrganization retrieves the current organization settings.
 func (c *Client) GetOrganization() (*Organization, error) {
 	respBody, err := c.doRequest(http.MethodGet, "/api/v1/organization", nil)
