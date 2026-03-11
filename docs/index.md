@@ -1,7 +1,7 @@
 ---
 page_title: "TowerOps Provider"
 description: |-
-  The TowerOps provider allows you to manage TowerOps resources such as sites and devices.
+  The TowerOps provider allows you to manage TowerOps resources such as sites, devices, on-call schedules, and escalation policies.
 ---
 
 # TowerOps Provider
@@ -98,6 +98,22 @@ resource "towerops_device" "modern_switch" {
 
   monitoring_enabled = true
   snmp_enabled       = true
+}
+```
+
+### On-Call Schedule and Escalation Policy
+
+```terraform
+resource "towerops_schedule" "primary" {
+  name        = "Primary On-Call"
+  timezone    = "America/Chicago"
+  description = "Main engineering on-call rotation"
+}
+
+resource "towerops_escalation_policy" "critical" {
+  name         = "Critical Alerts"
+  description  = "Escalation for P1 incidents"
+  repeat_count = 5
 }
 ```
 

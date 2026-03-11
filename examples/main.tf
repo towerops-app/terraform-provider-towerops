@@ -50,6 +50,20 @@ resource "towerops_device" "access_switch" {
   snmp_enabled       = true
 }
 
+# Create an on-call schedule
+resource "towerops_schedule" "primary" {
+  name        = "Primary On-Call"
+  timezone    = "America/Chicago"
+  description = "Main engineering on-call rotation"
+}
+
+# Create an escalation policy
+resource "towerops_escalation_policy" "default" {
+  name         = "Default Escalation"
+  description  = "Standard escalation for all alerts"
+  repeat_count = 3
+}
+
 # Output the site ID
 output "site_id" {
   value = towerops_site.main_office.id
@@ -57,4 +71,12 @@ output "site_id" {
 
 output "router_id" {
   value = towerops_device.core_router.id
+}
+
+output "schedule_id" {
+  value = towerops_schedule.primary.id
+}
+
+output "escalation_policy_id" {
+  value = towerops_escalation_policy.default.id
 }
