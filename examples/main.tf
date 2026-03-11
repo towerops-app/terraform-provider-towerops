@@ -64,6 +64,25 @@ resource "towerops_escalation_policy" "default" {
   repeat_count = 3
 }
 
+# Create an agent token
+resource "towerops_agent" "remote" {
+  name = "Remote Site Poller"
+}
+
+# Create an integration
+resource "towerops_integration" "pagerduty" {
+  provider = "pagerduty"
+  enabled  = true
+}
+
+# Create a maintenance window
+resource "towerops_maintenance_window" "network_upgrade" {
+  name      = "Network Upgrade"
+  reason    = "Upgrading core switches"
+  starts_at = "2024-03-15T02:00:00Z"
+  ends_at   = "2024-03-15T06:00:00Z"
+}
+
 # Output the site ID
 output "site_id" {
   value = towerops_site.main_office.id
@@ -79,4 +98,9 @@ output "schedule_id" {
 
 output "escalation_policy_id" {
   value = towerops_escalation_policy.default.id
+}
+
+output "agent_token" {
+  value     = towerops_agent.remote.token
+  sensitive = true
 }

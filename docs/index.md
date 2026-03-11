@@ -117,6 +117,39 @@ resource "towerops_escalation_policy" "critical" {
 }
 ```
 
+### Agent Token
+
+```terraform
+resource "towerops_agent" "office" {
+  name = "Office Poller"
+}
+
+output "agent_token" {
+  value     = towerops_agent.office.token
+  sensitive = true
+}
+```
+
+### Integration
+
+```terraform
+resource "towerops_integration" "pagerduty" {
+  provider = "pagerduty"
+  enabled  = true
+}
+```
+
+### Maintenance Window
+
+```terraform
+resource "towerops_maintenance_window" "network_upgrade" {
+  name      = "Network Upgrade"
+  reason    = "Upgrading core switches to new firmware"
+  starts_at = "2024-03-15T02:00:00Z"
+  ends_at   = "2024-03-15T06:00:00Z"
+}
+```
+
 ## Schema
 
 ### Required

@@ -367,6 +367,195 @@ func (c *Client) DeleteEscalationPolicy(id string) error {
 	return err
 }
 
+// Agent represents a TowerOps agent token.
+type Agent struct {
+	ID         string  `json:"id,omitempty"`
+	Name       string  `json:"name"`
+	Enabled    *bool   `json:"enabled,omitempty"`
+	LastSeenAt *string `json:"last_seen_at,omitempty"`
+	InsertedAt string  `json:"inserted_at,omitempty"`
+	Token      string  `json:"token,omitempty"`
+}
+
+// agentCreateResponse wraps the create response which includes token.
+type agentCreateResponse struct {
+	Agent
+}
+
+// CreateAgent creates a new agent token.
+func (c *Client) CreateAgent(agent Agent) (*Agent, error) {
+	body := map[string]Agent{"agent": agent}
+	respBody, err := c.doRequest(http.MethodPost, "/api/v1/agents", body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result Agent
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GetAgent retrieves an agent by ID.
+func (c *Client) GetAgent(id string) (*Agent, error) {
+	respBody, err := c.doRequest(http.MethodGet, "/api/v1/agents/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var result Agent
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeleteAgent deletes an agent.
+func (c *Client) DeleteAgent(id string) error {
+	_, err := c.doRequest(http.MethodDelete, "/api/v1/agents/"+id, nil)
+	return err
+}
+
+// Integration represents a TowerOps integration.
+type Integration struct {
+	ID                  string  `json:"id,omitempty"`
+	Provider            string  `json:"provider"`
+	Enabled             *bool   `json:"enabled,omitempty"`
+	SyncIntervalMinutes *int    `json:"sync_interval_minutes,omitempty"`
+	InsertedAt          string  `json:"inserted_at,omitempty"`
+	UpdatedAt           string  `json:"updated_at,omitempty"`
+}
+
+// integrationWithCredentials is used for create/update requests that include credentials.
+type integrationWithCredentials struct {
+	Provider            string                 `json:"provider"`
+	Enabled             *bool                  `json:"enabled,omitempty"`
+	Credentials         map[string]interface{} `json:"credentials,omitempty"`
+	SyncIntervalMinutes *int                   `json:"sync_interval_minutes,omitempty"`
+}
+
+// CreateIntegration creates a new integration.
+func (c *Client) CreateIntegration(integration integrationWithCredentials) (*Integration, error) {
+	body := map[string]integrationWithCredentials{"integration": integration}
+	respBody, err := c.doRequest(http.MethodPost, "/api/v1/integrations", body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result Integration
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GetIntegration retrieves an integration by ID.
+func (c *Client) GetIntegration(id string) (*Integration, error) {
+	respBody, err := c.doRequest(http.MethodGet, "/api/v1/integrations/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var result Integration
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// UpdateIntegration updates an existing integration.
+func (c *Client) UpdateIntegration(id string, integration integrationWithCredentials) (*Integration, error) {
+	body := map[string]integrationWithCredentials{"integration": integration}
+	respBody, err := c.doRequest(http.MethodPatch, "/api/v1/integrations/"+id, body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result Integration
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeleteIntegration deletes an integration.
+func (c *Client) DeleteIntegration(id string) error {
+	_, err := c.doRequest(http.MethodDelete, "/api/v1/integrations/"+id, nil)
+	return err
+}
+
+// MaintenanceWindowAPI represents a TowerOps maintenance window.
+type MaintenanceWindowAPI struct {
+	ID             string  `json:"id,omitempty"`
+	Name           string  `json:"name"`
+	Reason         *string `json:"reason,omitempty"`
+	StartsAt       string  `json:"starts_at"`
+	EndsAt         string  `json:"ends_at"`
+	SuppressAlerts *bool   `json:"suppress_alerts,omitempty"`
+	SiteID         *string `json:"site_id,omitempty"`
+	DeviceID       *string `json:"device_id,omitempty"`
+	InsertedAt     string  `json:"inserted_at,omitempty"`
+}
+
+// CreateMaintenanceWindow creates a new maintenance window.
+func (c *Client) CreateMaintenanceWindow(window MaintenanceWindowAPI) (*MaintenanceWindowAPI, error) {
+	body := map[string]MaintenanceWindowAPI{"maintenance_window": window}
+	respBody, err := c.doRequest(http.MethodPost, "/api/v1/maintenance_windows", body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result MaintenanceWindowAPI
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GetMaintenanceWindow retrieves a maintenance window by ID.
+func (c *Client) GetMaintenanceWindow(id string) (*MaintenanceWindowAPI, error) {
+	respBody, err := c.doRequest(http.MethodGet, "/api/v1/maintenance_windows/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var result MaintenanceWindowAPI
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// UpdateMaintenanceWindow updates an existing maintenance window.
+func (c *Client) UpdateMaintenanceWindow(id string, window MaintenanceWindowAPI) (*MaintenanceWindowAPI, error) {
+	body := map[string]MaintenanceWindowAPI{"maintenance_window": window}
+	respBody, err := c.doRequest(http.MethodPatch, "/api/v1/maintenance_windows/"+id, body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result MaintenanceWindowAPI
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeleteMaintenanceWindow deletes a maintenance window.
+func (c *Client) DeleteMaintenanceWindow(id string) error {
+	_, err := c.doRequest(http.MethodDelete, "/api/v1/maintenance_windows/"+id, nil)
+	return err
+}
+
 // GetOrganization retrieves the current organization settings.
 func (c *Client) GetOrganization() (*Organization, error) {
 	respBody, err := c.doRequest(http.MethodGet, "/api/v1/organization", nil)
