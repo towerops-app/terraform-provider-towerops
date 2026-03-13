@@ -38,11 +38,14 @@ func NewClient(token, baseURL string) *Client {
 
 // Site represents a TowerOps site.
 type Site struct {
-	ID            string  `json:"id,omitempty"`
-	Name          string  `json:"name"`
-	Location      *string `json:"location,omitempty"`
-	SNMPCommunity *string `json:"snmp_community,omitempty"`
-	InsertedAt    string  `json:"inserted_at,omitempty"`
+	ID            string   `json:"id,omitempty"`
+	Name          string   `json:"name"`
+	Location      *string  `json:"location,omitempty"`
+	Address       *string  `json:"address,omitempty"`
+	Latitude      *float64 `json:"latitude,omitempty"`
+	Longitude     *float64 `json:"longitude,omitempty"`
+	SNMPCommunity *string  `json:"snmp_community,omitempty"`
+	InsertedAt    string   `json:"inserted_at,omitempty"`
 }
 
 // Device represents a TowerOps device.

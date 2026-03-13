@@ -31,8 +31,11 @@ provider "towerops" {
 }
 
 resource "towerops_site" "example" {
-  name     = "Main Office"
-  location = "New York, NY"
+  name      = "Main Office"
+  location  = "New York, NY"
+  address   = "350 5th Ave, New York, NY 10118"
+  latitude  = 40.7484
+  longitude = -73.9857
 }
 
 resource "towerops_device" "router" {

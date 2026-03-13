@@ -23,11 +23,14 @@ type SiteResource struct {
 
 // SiteResourceModel describes the resource data model.
 type SiteResourceModel struct {
-	ID            types.String `tfsdk:"id"`
-	Name          types.String `tfsdk:"name"`
-	Location      types.String `tfsdk:"location"`
-	SNMPCommunity types.String `tfsdk:"snmp_community"`
-	InsertedAt    types.String `tfsdk:"inserted_at"`
+	ID            types.String  `tfsdk:"id"`
+	Name          types.String  `tfsdk:"name"`
+	Location      types.String  `tfsdk:"location"`
+	Address       types.String  `tfsdk:"address"`
+	Latitude      types.Float64 `tfsdk:"latitude"`
+	Longitude     types.Float64 `tfsdk:"longitude"`
+	SNMPCommunity types.String  `tfsdk:"snmp_community"`
+	InsertedAt    types.String  `tfsdk:"inserted_at"`
 }
 
 // NewSiteResource creates a new site resource.
@@ -55,7 +58,19 @@ func (r *SiteResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				Required:    true,
 			},
 			"location": schema.StringAttribute{
-				Description: "The physical location or address of the site.",
+				Description: "A short description of the physical location.",
+				Optional:    true,
+			},
+			"address": schema.StringAttribute{
+				Description: "The street address of the site.",
+				Optional:    true,
+			},
+			"latitude": schema.Float64Attribute{
+				Description: "The latitude of the site (-90 to 90).",
+				Optional:    true,
+			},
+			"longitude": schema.Float64Attribute{
+				Description: "The longitude of the site (-180 to 180).",
 				Optional:    true,
 			},
 			"snmp_community": schema.StringAttribute{
@@ -99,19 +114,7 @@ func (r *SiteResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	site := Site{
-		Name: data.Name.ValueString(),
-	}
-
-	if !data.Location.IsNull() {
-		location := data.Location.ValueString()
-		site.Location = &location
-	}
-
-	if !data.SNMPCommunity.IsNull() {
-		community := data.SNMPCommunity.ValueString()
-		site.SNMPCommunity = &community
-	}
+	site := buildSiteFromModel(&data)
 
 	created, err := r.client.CreateSite(site)
 	if err != nil {
@@ -121,13 +124,7 @@ func (r *SiteResource) Create(ctx context.Context, req resource.CreateRequest, r
 
 	data.ID = types.StringValue(created.ID)
 	data.InsertedAt = types.StringValue(created.InsertedAt)
-
-	if created.Location != nil {
-		data.Location = types.StringValue(*created.Location)
-	}
-	if created.SNMPCommunity != nil {
-		data.SNMPCommunity = types.StringValue(*created.SNMPCommunity)
-	}
+	setSiteOptionalFields(&data, created)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -153,18 +150,7 @@ func (r *SiteResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 
 	data.Name = types.StringValue(site.Name)
 	data.InsertedAt = types.StringValue(site.InsertedAt)
-
-	if site.Location != nil {
-		data.Location = types.StringValue(*site.Location)
-	} else {
-		data.Location = types.StringNull()
-	}
-
-	if site.SNMPCommunity != nil {
-		data.SNMPCommunity = types.StringValue(*site.SNMPCommunity)
-	} else {
-		data.SNMPCommunity = types.StringNull()
-	}
+	setSiteOptionalFields(&data, site)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -177,19 +163,7 @@ func (r *SiteResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	site := Site{
-		Name: data.Name.ValueString(),
-	}
-
-	if !data.Location.IsNull() {
-		location := data.Location.ValueString()
-		site.Location = &location
-	}
-
-	if !data.SNMPCommunity.IsNull() {
-		community := data.SNMPCommunity.ValueString()
-		site.SNMPCommunity = &community
-	}
+	site := buildSiteFromModel(&data)
 
 	updated, err := r.client.UpdateSite(data.ID.ValueString(), site)
 	if err != nil {
@@ -203,12 +177,7 @@ func (r *SiteResource) Update(ctx context.Context, req resource.UpdateRequest, r
 			data.ID = types.StringValue(created.ID)
 			data.InsertedAt = types.StringValue(created.InsertedAt)
 			data.Name = types.StringValue(created.Name)
-			if created.Location != nil {
-				data.Location = types.StringValue(*created.Location)
-			}
-			if created.SNMPCommunity != nil {
-				data.SNMPCommunity = types.StringValue(*created.SNMPCommunity)
-			}
+			setSiteOptionalFields(&data, created)
 			resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 			return
 		}
@@ -217,13 +186,7 @@ func (r *SiteResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	}
 
 	data.Name = types.StringValue(updated.Name)
-
-	if updated.Location != nil {
-		data.Location = types.StringValue(*updated.Location)
-	}
-	if updated.SNMPCommunity != nil {
-		data.SNMPCommunity = types.StringValue(*updated.SNMPCommunity)
-	}
+	setSiteOptionalFields(&data, updated)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -245,4 +208,63 @@ func (r *SiteResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 
 func (r *SiteResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+// buildSiteFromModel converts the Terraform model to an API Site struct.
+func buildSiteFromModel(data *SiteResourceModel) Site {
+	site := Site{
+		Name: data.Name.ValueString(),
+	}
+
+	if !data.Location.IsNull() {
+		v := data.Location.ValueString()
+		site.Location = &v
+	}
+	if !data.Address.IsNull() {
+		v := data.Address.ValueString()
+		site.Address = &v
+	}
+	if !data.Latitude.IsNull() {
+		v := data.Latitude.ValueFloat64()
+		site.Latitude = &v
+	}
+	if !data.Longitude.IsNull() {
+		v := data.Longitude.ValueFloat64()
+		site.Longitude = &v
+	}
+	if !data.SNMPCommunity.IsNull() {
+		v := data.SNMPCommunity.ValueString()
+		site.SNMPCommunity = &v
+	}
+
+	return site
+}
+
+// setSiteOptionalFields maps API response optional fields back to the Terraform model.
+func setSiteOptionalFields(data *SiteResourceModel, site *Site) {
+	if site.Location != nil {
+		data.Location = types.StringValue(*site.Location)
+	} else {
+		data.Location = types.StringNull()
+	}
+	if site.Address != nil {
+		data.Address = types.StringValue(*site.Address)
+	} else {
+		data.Address = types.StringNull()
+	}
+	if site.Latitude != nil {
+		data.Latitude = types.Float64Value(*site.Latitude)
+	} else {
+		data.Latitude = types.Float64Null()
+	}
+	if site.Longitude != nil {
+		data.Longitude = types.Float64Value(*site.Longitude)
+	} else {
+		data.Longitude = types.Float64Null()
+	}
+	if site.SNMPCommunity != nil {
+		data.SNMPCommunity = types.StringValue(*site.SNMPCommunity)
+	} else {
+		data.SNMPCommunity = types.StringNull()
+	}
 }
