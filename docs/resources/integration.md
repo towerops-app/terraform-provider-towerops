@@ -14,7 +14,7 @@ Manages a TowerOps integration with third-party services such as PagerDuty, Slac
 
 ```terraform
 resource "towerops_integration" "pagerduty" {
-  provider = "pagerduty"
+  provider_type ="pagerduty"
   enabled  = true
 }
 ```
@@ -33,7 +33,7 @@ resource "towerops_integration" "webhook" {
 
 ```terraform
 resource "towerops_integration" "slack" {
-  provider = "slack"
+  provider_type ="slack"
   enabled  = false
 }
 ```
@@ -42,7 +42,7 @@ resource "towerops_integration" "slack" {
 
 ### Required
 
-- `provider` (String) - The integration provider type (e.g. `pagerduty`, `slack`, `webhook`).
+- `provider_type` (String) - The integration provider type (e.g. `pagerduty`, `slack`, `webhook`).
 
 ### Optional
 

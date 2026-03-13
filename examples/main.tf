@@ -71,7 +71,7 @@ resource "towerops_agent" "remote" {
 
 # Create an integration
 resource "towerops_integration" "pagerduty" {
-  provider = "pagerduty"
+  provider_type = "pagerduty"
   enabled  = true
 }
 

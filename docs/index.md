@@ -137,8 +137,8 @@ output "agent_token" {
 
 ```terraform
 resource "towerops_integration" "pagerduty" {
-  provider = "pagerduty"
-  enabled  = true
+  provider_type = "pagerduty"
+  enabled       = true
 }
 ```
 

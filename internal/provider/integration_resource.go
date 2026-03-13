@@ -25,7 +25,7 @@ type IntegrationResource struct {
 // IntegrationResourceModel describes the resource data model.
 type IntegrationResourceModel struct {
 	ID                  types.String `tfsdk:"id"`
-	Provider            types.String `tfsdk:"provider"`
+	ProviderType        types.String `tfsdk:"provider_type"`
 	Enabled             types.Bool   `tfsdk:"enabled"`
 	SyncIntervalMinutes types.Int64  `tfsdk:"sync_interval_minutes"`
 	InsertedAt          types.String `tfsdk:"inserted_at"`
@@ -51,7 +51,7 @@ func (r *IntegrationResource) Schema(ctx context.Context, req resource.SchemaReq
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"provider": schema.StringAttribute{
+			"provider_type": schema.StringAttribute{
 				Description: "The integration provider type (e.g. pagerduty, slack, webhook).",
 				Required:    true,
 			},
@@ -102,7 +102,7 @@ func (r *IntegrationResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	integration := integrationWithCredentials{
-		Provider: data.Provider.ValueString(),
+		Provider: data.ProviderType.ValueString(),
 	}
 
 	if !data.Enabled.IsNull() {
@@ -152,7 +152,7 @@ func (r *IntegrationResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	data.Provider = types.StringValue(integration.Provider)
+	data.ProviderType = types.StringValue(integration.Provider)
 	data.InsertedAt = types.StringValue(integration.InsertedAt)
 
 	if integration.Enabled != nil {
@@ -176,7 +176,7 @@ func (r *IntegrationResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	integration := integrationWithCredentials{
-		Provider: data.Provider.ValueString(),
+		Provider: data.ProviderType.ValueString(),
 	}
 
 	if !data.Enabled.IsNull() {
@@ -212,7 +212,7 @@ func (r *IntegrationResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	data.Provider = types.StringValue(updated.Provider)
+	data.ProviderType = types.StringValue(updated.Provider)
 
 	if updated.Enabled != nil {
 		data.Enabled = types.BoolValue(*updated.Enabled)
