@@ -559,6 +559,79 @@ func (c *Client) DeleteMaintenanceWindow(id string) error {
 	return err
 }
 
+// Check represents a TowerOps service check.
+type Check struct {
+	ID                   string         `json:"id,omitempty"`
+	Name                 string         `json:"name"`
+	CheckType            string         `json:"check_type"`
+	Description          *string        `json:"description,omitempty"`
+	Enabled              *bool          `json:"enabled,omitempty"`
+	DeviceID             *string        `json:"device_id,omitempty"`
+	AgentTokenID         *string        `json:"agent_token_id,omitempty"`
+	IntervalSeconds      *int           `json:"interval_seconds,omitempty"`
+	TimeoutMs            *int           `json:"timeout_ms,omitempty"`
+	RetryIntervalSeconds *int           `json:"retry_interval_seconds,omitempty"`
+	MaxCheckAttempts     *int           `json:"max_check_attempts,omitempty"`
+	Config               map[string]any `json:"config"`
+	CurrentState         *int           `json:"current_state,omitempty"`
+	CurrentStateType     *string        `json:"current_state_type,omitempty"`
+	LastCheckAt          *string        `json:"last_check_at,omitempty"`
+	InsertedAt           string         `json:"inserted_at,omitempty"`
+}
+
+// CreateCheck creates a new service check.
+func (c *Client) CreateCheck(check Check) (*Check, error) {
+	body := map[string]Check{"check": check}
+	respBody, err := c.doRequest(http.MethodPost, "/api/v1/checks", body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result Check
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GetCheck retrieves a check by ID.
+func (c *Client) GetCheck(id string) (*Check, error) {
+	respBody, err := c.doRequest(http.MethodGet, "/api/v1/checks/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var result Check
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// UpdateCheck updates an existing check.
+func (c *Client) UpdateCheck(id string, check Check) (*Check, error) {
+	body := map[string]Check{"check": check}
+	respBody, err := c.doRequest(http.MethodPatch, "/api/v1/checks/"+id, body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result Check
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeleteCheck deletes a check.
+func (c *Client) DeleteCheck(id string) error {
+	_, err := c.doRequest(http.MethodDelete, "/api/v1/checks/"+id, nil)
+	return err
+}
+
 // GetOrganization retrieves the current organization settings.
 func (c *Client) GetOrganization() (*Organization, error) {
 	respBody, err := c.doRequest(http.MethodGet, "/api/v1/organization", nil)

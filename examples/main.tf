@@ -83,6 +83,29 @@ resource "towerops_maintenance_window" "network_upgrade" {
   ends_at   = "2024-03-15T06:00:00Z"
 }
 
+# Service checks
+resource "towerops_check" "web_health" {
+  name            = "Web Health Check"
+  check_type      = "http"
+  url             = "https://example.com/health"
+  expected_status = 200
+  content_match   = "\"status\":\"ok\""
+}
+
+resource "towerops_check" "dns_resolution" {
+  name        = "DNS Resolution"
+  check_type  = "dns"
+  hostname    = "google.com"
+  dns_server  = "10.0.0.1"
+  record_type = "A"
+}
+
+resource "towerops_check" "gateway_ping" {
+  name       = "Gateway Reachability"
+  check_type = "ping"
+  host       = "10.0.0.1"
+}
+
 # Output the site ID
 output "site_id" {
   value = towerops_site.main_office.id

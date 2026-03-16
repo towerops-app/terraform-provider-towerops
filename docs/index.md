@@ -133,6 +133,24 @@ output "agent_token" {
 }
 ```
 
+### Service Checks
+
+```terraform
+resource "towerops_check" "web_health" {
+  name            = "Web Health Check"
+  check_type      = "http"
+  url             = "https://example.com/health"
+  expected_status = 200
+  content_match   = "\"status\":\"ok\""
+}
+
+resource "towerops_check" "gateway_ping" {
+  name       = "Gateway Reachability"
+  check_type = "ping"
+  host       = "10.0.0.1"
+}
+```
+
 ### Integration
 
 ```terraform
