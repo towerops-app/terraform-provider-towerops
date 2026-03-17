@@ -55,6 +55,16 @@ resource "towerops_device" "secure_switch" {
 }
 ```
 
+### Ping/DNS-only Device (no SNMP)
+
+```terraform
+resource "towerops_device" "resolver" {
+  site_id    = towerops_site.example.id
+  name       = "resolver1"
+  ip_address = "204.110.191.240"
+}
+```
+
 ### Minimal Configuration
 
 ```terraform
@@ -77,7 +87,7 @@ resource "towerops_device" "switch" {
 - `name` (String) - The name of the device. If not provided, will be auto-discovered from SNMP.
 - `description` (String) - A description of the device.
 - `monitoring_enabled` (Boolean) - Whether monitoring is enabled for this device. Default: `true`.
-- `snmp_enabled` (Boolean) - Whether SNMP polling is enabled for this device. Default: `true`.
+- `snmp_enabled` (Boolean) - Whether SNMP polling is enabled for this device. Default: `false`.
 - `snmp_version` (String) - The SNMP version to use (`1`, `2c`, or `3`). Default: `"2c"`.
 - `snmp_port` (Number) - The SNMP port to use. Default: `161`.
 

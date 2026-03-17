@@ -105,7 +105,7 @@ func (r *DeviceResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Description: "Whether SNMP polling is enabled for this device.",
 				Optional:    true,
 				Computed:    true,
-				Default:     booldefault.StaticBool(true),
+				Default:     booldefault.StaticBool(false),
 			},
 			"snmp_version": schema.StringAttribute{
 				Description: "The SNMP version to use (1, 2c, or 3).",
@@ -215,45 +215,48 @@ func (r *DeviceResource) Create(ctx context.Context, req resource.CreateRequest,
 		device.SNMPEnabled = &enabled
 	}
 
-	if !data.SNMPVersion.IsNull() {
-		version := data.SNMPVersion.ValueString()
-		device.SNMPVersion = &version
-	}
+	// Only send SNMP config when SNMP is enabled
+	if data.SNMPEnabled.ValueBool() {
+		if !data.SNMPVersion.IsNull() {
+			version := data.SNMPVersion.ValueString()
+			device.SNMPVersion = &version
+		}
 
-	if !data.SNMPPort.IsNull() {
-		port := int(data.SNMPPort.ValueInt64())
-		device.SNMPPort = &port
-	}
+		if !data.SNMPPort.IsNull() {
+			port := int(data.SNMPPort.ValueInt64())
+			device.SNMPPort = &port
+		}
 
-	// SNMPv3 fields
-	if !data.SNMPv3SecurityLevel.IsNull() {
-		level := data.SNMPv3SecurityLevel.ValueString()
-		device.SNMPv3SecurityLevel = &level
-	}
+		// SNMPv3 fields
+		if !data.SNMPv3SecurityLevel.IsNull() {
+			level := data.SNMPv3SecurityLevel.ValueString()
+			device.SNMPv3SecurityLevel = &level
+		}
 
-	if !data.SNMPv3Username.IsNull() {
-		username := data.SNMPv3Username.ValueString()
-		device.SNMPv3Username = &username
-	}
+		if !data.SNMPv3Username.IsNull() {
+			username := data.SNMPv3Username.ValueString()
+			device.SNMPv3Username = &username
+		}
 
-	if !data.SNMPv3AuthProtocol.IsNull() {
-		protocol := data.SNMPv3AuthProtocol.ValueString()
-		device.SNMPv3AuthProtocol = &protocol
-	}
+		if !data.SNMPv3AuthProtocol.IsNull() {
+			protocol := data.SNMPv3AuthProtocol.ValueString()
+			device.SNMPv3AuthProtocol = &protocol
+		}
 
-	if !data.SNMPv3AuthPassword.IsNull() {
-		password := data.SNMPv3AuthPassword.ValueString()
-		device.SNMPv3AuthPassword = &password
-	}
+		if !data.SNMPv3AuthPassword.IsNull() {
+			password := data.SNMPv3AuthPassword.ValueString()
+			device.SNMPv3AuthPassword = &password
+		}
 
-	if !data.SNMPv3PrivProtocol.IsNull() {
-		protocol := data.SNMPv3PrivProtocol.ValueString()
-		device.SNMPv3PrivProtocol = &protocol
-	}
+		if !data.SNMPv3PrivProtocol.IsNull() {
+			protocol := data.SNMPv3PrivProtocol.ValueString()
+			device.SNMPv3PrivProtocol = &protocol
+		}
 
-	if !data.SNMPv3PrivPassword.IsNull() {
-		password := data.SNMPv3PrivPassword.ValueString()
-		device.SNMPv3PrivPassword = &password
+		if !data.SNMPv3PrivPassword.IsNull() {
+			password := data.SNMPv3PrivPassword.ValueString()
+			device.SNMPv3PrivPassword = &password
+		}
 	}
 
 	created, err := r.client.CreateDevice(device)
@@ -435,45 +438,48 @@ func (r *DeviceResource) Update(ctx context.Context, req resource.UpdateRequest,
 		device.SNMPEnabled = &enabled
 	}
 
-	if !data.SNMPVersion.IsNull() {
-		version := data.SNMPVersion.ValueString()
-		device.SNMPVersion = &version
-	}
+	// Only send SNMP config when SNMP is enabled
+	if data.SNMPEnabled.ValueBool() {
+		if !data.SNMPVersion.IsNull() {
+			version := data.SNMPVersion.ValueString()
+			device.SNMPVersion = &version
+		}
 
-	if !data.SNMPPort.IsNull() {
-		port := int(data.SNMPPort.ValueInt64())
-		device.SNMPPort = &port
-	}
+		if !data.SNMPPort.IsNull() {
+			port := int(data.SNMPPort.ValueInt64())
+			device.SNMPPort = &port
+		}
 
-	// SNMPv3 fields
-	if !data.SNMPv3SecurityLevel.IsNull() {
-		level := data.SNMPv3SecurityLevel.ValueString()
-		device.SNMPv3SecurityLevel = &level
-	}
+		// SNMPv3 fields
+		if !data.SNMPv3SecurityLevel.IsNull() {
+			level := data.SNMPv3SecurityLevel.ValueString()
+			device.SNMPv3SecurityLevel = &level
+		}
 
-	if !data.SNMPv3Username.IsNull() {
-		username := data.SNMPv3Username.ValueString()
-		device.SNMPv3Username = &username
-	}
+		if !data.SNMPv3Username.IsNull() {
+			username := data.SNMPv3Username.ValueString()
+			device.SNMPv3Username = &username
+		}
 
-	if !data.SNMPv3AuthProtocol.IsNull() {
-		protocol := data.SNMPv3AuthProtocol.ValueString()
-		device.SNMPv3AuthProtocol = &protocol
-	}
+		if !data.SNMPv3AuthProtocol.IsNull() {
+			protocol := data.SNMPv3AuthProtocol.ValueString()
+			device.SNMPv3AuthProtocol = &protocol
+		}
 
-	if !data.SNMPv3AuthPassword.IsNull() {
-		password := data.SNMPv3AuthPassword.ValueString()
-		device.SNMPv3AuthPassword = &password
-	}
+		if !data.SNMPv3AuthPassword.IsNull() {
+			password := data.SNMPv3AuthPassword.ValueString()
+			device.SNMPv3AuthPassword = &password
+		}
 
-	if !data.SNMPv3PrivProtocol.IsNull() {
-		protocol := data.SNMPv3PrivProtocol.ValueString()
-		device.SNMPv3PrivProtocol = &protocol
-	}
+		if !data.SNMPv3PrivProtocol.IsNull() {
+			protocol := data.SNMPv3PrivProtocol.ValueString()
+			device.SNMPv3PrivProtocol = &protocol
+		}
 
-	if !data.SNMPv3PrivPassword.IsNull() {
-		password := data.SNMPv3PrivPassword.ValueString()
-		device.SNMPv3PrivPassword = &password
+		if !data.SNMPv3PrivPassword.IsNull() {
+			password := data.SNMPv3PrivPassword.ValueString()
+			device.SNMPv3PrivPassword = &password
+		}
 	}
 
 	updated, err := r.client.UpdateDevice(data.ID.ValueString(), device)
