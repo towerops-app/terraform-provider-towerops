@@ -68,10 +68,12 @@ func (r *SiteResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			"latitude": schema.Float64Attribute{
 				Description: "The latitude of the site (-90 to 90).",
 				Optional:    true,
+				Computed:    true,
 			},
 			"longitude": schema.Float64Attribute{
 				Description: "The longitude of the site (-180 to 180).",
 				Optional:    true,
+				Computed:    true,
 			},
 			"snmp_community": schema.StringAttribute{
 				Description: "The default SNMP community string for devices at this site.",
