@@ -15,12 +15,11 @@ resource "towerops_check" "radius_port" {
   port       = 1812
 }
 
-# DNS resolution check
+# DNS resolution check (uses device IP as DNS server when device_id is set)
 resource "towerops_check" "dns_resolution" {
   name        = "DNS Resolution"
   check_type  = "dns"
   hostname    = "google.com"
-  dns_server  = "10.0.0.1"
   record_type = "A"
 }
 

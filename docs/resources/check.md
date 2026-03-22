@@ -141,7 +141,6 @@ resource "towerops_check" "wan_ping" {
 
 - `hostname` (String) - The hostname to resolve. Required for DNS checks.
 - `record_type` (String) - DNS record type (`A`, `AAAA`, `CNAME`, `MX`, `TXT`, `NS`, `PTR`). Default: `"A"`.
-- `dns_server` (String) - DNS server to query. Uses system default if not set.
 - `expected_result` (String) - Expected DNS resolution result.
 
 #### Ping Check Fields (used when `check_type = "ping"`)

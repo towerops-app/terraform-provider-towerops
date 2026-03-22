@@ -55,7 +55,6 @@ type CheckResourceModel struct {
 	// DNS config
 	Hostname       types.String `tfsdk:"hostname"`
 	RecordType     types.String `tfsdk:"record_type"`
-	DNSServer      types.String `tfsdk:"dns_server"`
 	ExpectedResult types.String `tfsdk:"expected_result"`
 
 	// Ping config
@@ -204,10 +203,6 @@ func (r *CheckResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				Optional:    true,
 				Computed:    true,
 				Default:     stringdefault.StaticString("A"),
-			},
-			"dns_server": schema.StringAttribute{
-				Description: "DNS server to query. Uses system default if not set.",
-				Optional:    true,
 			},
 			"expected_result": schema.StringAttribute{
 				Description: "Expected DNS resolution result.",
@@ -490,9 +485,6 @@ func buildConfig(data CheckResourceModel) map[string]any {
 		if !data.RecordType.IsNull() {
 			config["record_type"] = data.RecordType.ValueString()
 		}
-		if !data.DNSServer.IsNull() {
-			config["server"] = data.DNSServer.ValueString()
-		}
 		if !data.ExpectedResult.IsNull() {
 			config["expected"] = data.ExpectedResult.ValueString()
 		}
@@ -623,9 +615,6 @@ func unpackConfig(config map[string]any, checkType string, data *CheckResourceMo
 		}
 		if v, ok := config["record_type"].(string); ok {
 			data.RecordType = types.StringValue(v)
-		}
-		if v, ok := config["server"].(string); ok {
-			data.DNSServer = types.StringValue(v)
 		}
 		if v, ok := config["expected"].(string); ok {
 			data.ExpectedResult = types.StringValue(v)

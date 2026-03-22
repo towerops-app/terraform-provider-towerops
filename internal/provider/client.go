@@ -62,7 +62,6 @@ type Device struct {
 	SNMPPort             *int    `json:"snmp_port,omitempty"`
 	CheckIntervalSeconds *int    `json:"check_interval_seconds,omitempty"`
 	DeviceRole           *string `json:"device_role,omitempty"`
-	DeviceRoleSource     *string `json:"device_role_source,omitempty"`
 	// SNMPv3 fields
 	SNMPv3SecurityLevel *string `json:"snmpv3_security_level,omitempty"`
 	SNMPv3Username      *string `json:"snmpv3_username,omitempty"`

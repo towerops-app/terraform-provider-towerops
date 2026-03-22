@@ -37,7 +37,6 @@ type DeviceResourceModel struct {
 	SNMPVersion          types.String `tfsdk:"snmp_version"`
 	SNMPPort             types.Int64  `tfsdk:"snmp_port"`
 	DeviceRole           types.String `tfsdk:"device_role"`
-	DeviceRoleSource     types.String `tfsdk:"device_role_source"`
 	SNMPv3SecurityLevel  types.String `tfsdk:"snmpv3_security_level"`
 	SNMPv3Username       types.String `tfsdk:"snmpv3_username"`
 	SNMPv3AuthProtocol   types.String `tfsdk:"snmpv3_auth_protocol"`
@@ -122,12 +121,8 @@ func (r *DeviceResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Default:     int64default.StaticInt64(161),
 			},
 			"device_role": schema.StringAttribute{
-				Description: "The device type/role. Valid values: server, switch, router, access_point, backhaul, other. Required field.",
+				Description: "The device type/role. Valid values: server, switch, router, access_point, backhaul, other. Defaults to 'other' if not specified.",
 				Optional:    true,
-				Computed:    true,
-			},
-			"device_role_source": schema.StringAttribute{
-				Description: "The source of the device role (manual or inferred). Automatically set to 'manual' when device_role is provided.",
 				Computed:    true,
 			},
 			"snmpv3_security_level": schema.StringAttribute{
@@ -306,11 +301,6 @@ func (r *DeviceResource) Create(ctx context.Context, req resource.CreateRequest,
 		data.DeviceRole = types.StringNull()
 	}
 
-	if created.DeviceRoleSource != nil {
-		data.DeviceRoleSource = types.StringValue(*created.DeviceRoleSource)
-	} else {
-		data.DeviceRoleSource = types.StringNull()
-	}
 
 	if created.MonitoringEnabled != nil {
 		data.MonitoringEnabled = types.BoolValue(*created.MonitoringEnabled)
@@ -372,12 +362,6 @@ func (r *DeviceResource) Read(ctx context.Context, req resource.ReadRequest, res
 		data.DeviceRole = types.StringValue(*device.DeviceRole)
 	} else {
 		data.DeviceRole = types.StringNull()
-	}
-
-	if device.DeviceRoleSource != nil {
-		data.DeviceRoleSource = types.StringValue(*device.DeviceRoleSource)
-	} else {
-		data.DeviceRoleSource = types.StringNull()
 	}
 
 	if device.MonitoringEnabled != nil {
@@ -563,11 +547,6 @@ func (r *DeviceResource) Update(ctx context.Context, req resource.UpdateRequest,
 			} else {
 				data.DeviceRole = types.StringNull()
 			}
-			if created.DeviceRoleSource != nil {
-				data.DeviceRoleSource = types.StringValue(*created.DeviceRoleSource)
-			} else {
-				data.DeviceRoleSource = types.StringNull()
-			}
 			if created.MonitoringEnabled != nil {
 				data.MonitoringEnabled = types.BoolValue(*created.MonitoringEnabled)
 			}
@@ -611,11 +590,6 @@ func (r *DeviceResource) Update(ctx context.Context, req resource.UpdateRequest,
 		data.DeviceRole = types.StringValue(*updated.DeviceRole)
 	} else {
 		data.DeviceRole = types.StringNull()
-	}
-	if updated.DeviceRoleSource != nil {
-		data.DeviceRoleSource = types.StringValue(*updated.DeviceRoleSource)
-	} else {
-		data.DeviceRoleSource = types.StringNull()
 	}
 	if updated.MonitoringEnabled != nil {
 		data.MonitoringEnabled = types.BoolValue(*updated.MonitoringEnabled)
