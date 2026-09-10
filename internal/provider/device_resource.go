@@ -26,24 +26,24 @@ type DeviceResource struct {
 
 // DeviceResourceModel describes the resource data model.
 type DeviceResourceModel struct {
-	ID                   types.String `tfsdk:"id"`
-	SiteID               types.String `tfsdk:"site_id"`
-	OrganizationID       types.String `tfsdk:"organization_id"`
-	Name                 types.String `tfsdk:"name"`
-	IPAddress            types.String `tfsdk:"ip_address"`
-	Description          types.String `tfsdk:"description"`
-	MonitoringEnabled    types.Bool   `tfsdk:"monitoring_enabled"`
-	SNMPEnabled          types.Bool   `tfsdk:"snmp_enabled"`
-	SNMPVersion          types.String `tfsdk:"snmp_version"`
-	SNMPPort             types.Int64  `tfsdk:"snmp_port"`
-	DeviceRole           types.String `tfsdk:"device_role"`
-	SNMPv3SecurityLevel  types.String `tfsdk:"snmpv3_security_level"`
-	SNMPv3Username       types.String `tfsdk:"snmpv3_username"`
-	SNMPv3AuthProtocol   types.String `tfsdk:"snmpv3_auth_protocol"`
-	SNMPv3AuthPassword   types.String `tfsdk:"snmpv3_auth_password"`
-	SNMPv3PrivProtocol   types.String `tfsdk:"snmpv3_priv_protocol"`
-	SNMPv3PrivPassword   types.String `tfsdk:"snmpv3_priv_password"`
-	InsertedAt           types.String `tfsdk:"inserted_at"`
+	ID                  types.String `tfsdk:"id"`
+	SiteID              types.String `tfsdk:"site_id"`
+	OrganizationID      types.String `tfsdk:"organization_id"`
+	Name                types.String `tfsdk:"name"`
+	IPAddress           types.String `tfsdk:"ip_address"`
+	Description         types.String `tfsdk:"description"`
+	MonitoringEnabled   types.Bool   `tfsdk:"monitoring_enabled"`
+	SNMPEnabled         types.Bool   `tfsdk:"snmp_enabled"`
+	SNMPVersion         types.String `tfsdk:"snmp_version"`
+	SNMPPort            types.Int64  `tfsdk:"snmp_port"`
+	DeviceRole          types.String `tfsdk:"device_role"`
+	SNMPv3SecurityLevel types.String `tfsdk:"snmpv3_security_level"`
+	SNMPv3Username      types.String `tfsdk:"snmpv3_username"`
+	SNMPv3AuthProtocol  types.String `tfsdk:"snmpv3_auth_protocol"`
+	SNMPv3AuthPassword  types.String `tfsdk:"snmpv3_auth_password"`
+	SNMPv3PrivProtocol  types.String `tfsdk:"snmpv3_priv_protocol"`
+	SNMPv3PrivPassword  types.String `tfsdk:"snmpv3_priv_password"`
+	InsertedAt          types.String `tfsdk:"inserted_at"`
 }
 
 // NewDeviceResource creates a new device resource.
@@ -79,8 +79,8 @@ func (r *DeviceResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Optional:    true,
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
-				stringplanmodifier.RequiresReplace(),
+					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"name": schema.StringAttribute{
@@ -300,7 +300,6 @@ func (r *DeviceResource) Create(ctx context.Context, req resource.CreateRequest,
 	} else {
 		data.DeviceRole = types.StringNull()
 	}
-
 
 	if created.MonitoringEnabled != nil {
 		data.MonitoringEnabled = types.BoolValue(*created.MonitoringEnabled)
