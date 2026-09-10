@@ -425,12 +425,12 @@ func (c *Client) DeleteAgent(id string) error {
 
 // Integration represents a TowerOps integration.
 type Integration struct {
-	ID                  string  `json:"id,omitempty"`
-	Provider            string  `json:"provider"`
-	Enabled             *bool   `json:"enabled,omitempty"`
-	SyncIntervalMinutes *int    `json:"sync_interval_minutes,omitempty"`
-	InsertedAt          string  `json:"inserted_at,omitempty"`
-	UpdatedAt           string  `json:"updated_at,omitempty"`
+	ID                  string `json:"id,omitempty"`
+	Provider            string `json:"provider"`
+	Enabled             *bool  `json:"enabled,omitempty"`
+	SyncIntervalMinutes *int   `json:"sync_interval_minutes,omitempty"`
+	InsertedAt          string `json:"inserted_at,omitempty"`
+	UpdatedAt           string `json:"updated_at,omitempty"`
 }
 
 // integrationWithCredentials is used for create/update requests that include credentials.
