@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"regexp"
 	"sync"
 	"testing"
@@ -802,4 +803,155 @@ resource "towerops_check" "test" {
   ping_count = 3
 }
 `, apiURL)
+}
+
+// checkTestEchoServer serves back whatever config the provider sent, and hands
+// the caller a reader for that config.
+//
+// Asserting on state alone would prove nothing here: an Optional attribute
+// keeps its planned value in state whether or not the resource ever put it on
+// the wire, so a dropped `config` mapping still produces a green plan. The
+// observable contract is that configuring the attribute makes the value reach
+// the API, so that is what these tests read.
+func checkTestEchoServer(t *testing.T, id, checkType string) (*httptest.Server, func() map[string]any) {
+	t.Helper()
+
+	var mu sync.Mutex
+	var stored map[string]any
+	enabled := true
+	alerting := true
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+
+		respond := func(status int) {
+			checkTestData(w, status, Check{
+				ID:         id,
+				Name:       "Echo",
+				CheckType:  checkType,
+				Enabled:    &enabled,
+				Alerting:   &alerting,
+				Config:     stored,
+				InsertedAt: "2024-01-01T00:00:00Z",
+			})
+		}
+
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/checks":
+			var body map[string]Check
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Errorf("decode create body: %v", err)
+			}
+			stored = body["check"].Config
+			respond(http.StatusCreated)
+
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/checks/"+id:
+			respond(http.StatusOK)
+
+		case r.Method == http.MethodDelete && r.URL.Path == "/api/v1/checks/"+id:
+			checkTestDeleted(w)
+
+		default:
+			checkTestError(w, http.StatusNotFound, "not_found", "Check not found")
+		}
+	}))
+
+	return server, func() map[string]any {
+		mu.Lock()
+		defer mu.Unlock()
+		return stored
+	}
+}
+
+// checkTestSentConfig asserts the value the provider put at config[key].
+func checkTestSentConfig(t *testing.T, sent func() map[string]any, key string, want any) resource.TestCheckFunc {
+	t.Helper()
+
+	return func(*terraform.State) error {
+		got, ok := sent()[key]
+		if !ok {
+			return fmt.Errorf("config[%q] was never sent to the API", key)
+		}
+		if !reflect.DeepEqual(got, want) {
+			return fmt.Errorf("config[%q] = %#v, want %#v", key, got, want)
+		}
+		return nil
+	}
+}
+
+func TestAccCheckResource_httpHeadersAndBody(t *testing.T) {
+	server, sent := checkTestEchoServer(t, "test-http-echo-id", "http")
+	defer server.Close()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories(server.URL),
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+provider "towerops" {
+  token   = "test-token"
+  api_url = %q
+}
+
+resource "towerops_check" "test" {
+  name         = "Echo"
+  check_type   = "http"
+  url          = "https://example.com/ingest"
+  method       = "POST"
+  request_body = "{\"probe\":true}"
+
+  request_headers = {
+    "X-Probe"   = "towerops"
+    "X-Api-Key" = "abc123"
+  }
+}
+`, server.URL),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkTestSentConfig(t, sent, "body", `{"probe":true}`),
+					checkTestSentConfig(t, sent, "headers", map[string]any{
+						"X-Probe":   "towerops",
+						"X-Api-Key": "abc123",
+					}),
+					resource.TestCheckResourceAttr("towerops_check.test", "request_headers.X-Probe", "towerops"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccCheckResource_pingThresholds(t *testing.T) {
+	server, sent := checkTestEchoServer(t, "test-ping-echo-id", "ping")
+	defer server.Close()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories(server.URL),
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+provider "towerops" {
+  token   = "test-token"
+  api_url = %q
+}
+
+resource "towerops_check" "test" {
+  name       = "Echo"
+  check_type = "ping"
+  host       = "10.0.0.1"
+  ping_count = 5
+
+  loss_warning_percent = 2.5
+  latency_warning_ms   = 100
+  latency_critical_ms  = 250
+}
+`, server.URL),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkTestSentConfig(t, sent, "count", float64(5)),
+					checkTestSentConfig(t, sent, "loss_warning_percent", 2.5),
+					checkTestSentConfig(t, sent, "latency_warning_ms", float64(100)),
+					checkTestSentConfig(t, sent, "latency_critical_ms", float64(250)),
+				),
+			},
+		},
+	})
 }
