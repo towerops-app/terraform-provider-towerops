@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -23,14 +24,22 @@ type SiteResource struct {
 
 // SiteResourceModel describes the resource data model.
 type SiteResourceModel struct {
-	ID            types.String  `tfsdk:"id"`
-	Name          types.String  `tfsdk:"name"`
-	Location      types.String  `tfsdk:"location"`
-	Address       types.String  `tfsdk:"address"`
-	Latitude      types.Float64 `tfsdk:"latitude"`
-	Longitude     types.Float64 `tfsdk:"longitude"`
-	SNMPCommunity types.String  `tfsdk:"snmp_community"`
-	InsertedAt    types.String  `tfsdk:"inserted_at"`
+	ID               types.String  `tfsdk:"id"`
+	Name             types.String  `tfsdk:"name"`
+	Description      types.String  `tfsdk:"description"`
+	Location         types.String  `tfsdk:"location"`
+	Address          types.String  `tfsdk:"address"`
+	Latitude         types.Float64 `tfsdk:"latitude"`
+	Longitude        types.Float64 `tfsdk:"longitude"`
+	DisplayOrder     types.Int64   `tfsdk:"display_order"`
+	SNMPCommunity    types.String  `tfsdk:"snmp_community"`
+	SNMPCommunitySet types.Bool    `tfsdk:"snmp_community_set"`
+	SNMPVersion      types.String  `tfsdk:"snmp_version"`
+	SNMPPort         types.Int64   `tfsdk:"snmp_port"`
+	SNMPTransport    types.String  `tfsdk:"snmp_transport"`
+	AgentTokenID     types.String  `tfsdk:"agent_token_id"`
+	ParentSiteID     types.String  `tfsdk:"parent_site_id"`
+	InsertedAt       types.String  `tfsdk:"inserted_at"`
 }
 
 // NewSiteResource creates a new site resource.
@@ -57,12 +66,16 @@ func (r *SiteResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				Description: "The name of the site. Must be between 2 and 200 characters.",
 				Required:    true,
 			},
+			"description": schema.StringAttribute{
+				Description: "A longer description of the site. Maximum 1000 characters.",
+				Optional:    true,
+			},
 			"location": schema.StringAttribute{
-				Description: "A short description of the physical location.",
+				Description: "A short description of the physical location. Maximum 200 characters.",
 				Optional:    true,
 			},
 			"address": schema.StringAttribute{
-				Description: "The street address of the site.",
+				Description: "The street address of the site. Maximum 500 characters.",
 				Optional:    true,
 			},
 			"latitude": schema.Float64Attribute{
@@ -75,10 +88,43 @@ func (r *SiteResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				Optional:    true,
 				Computed:    true,
 			},
+			"display_order": schema.Int64Attribute{
+				Description: "The sort position of the site in TowerOps listings.",
+				Optional:    true,
+				Computed:    true,
+			},
 			"snmp_community": schema.StringAttribute{
-				Description: "The default SNMP community string for devices at this site.",
+				Description: "The default SNMP community string for devices at this site. Write only: the API accepts this value but never returns it, so use snmp_community_set to tell whether a community is stored.",
 				Optional:    true,
 				Sensitive:   true,
+			},
+			"snmp_community_set": schema.BoolAttribute{
+				Description: "Whether the site has an SNMP community string stored.",
+				Computed:    true,
+			},
+			"snmp_version": schema.StringAttribute{
+				Description: "The default SNMP version for devices at this site. One of \"1\", \"2c\", or \"3\".",
+				Optional:    true,
+				Computed:    true,
+			},
+			"snmp_port": schema.Int64Attribute{
+				Description: "The default SNMP port for devices at this site (1 to 65535).",
+				Optional:    true,
+				Computed:    true,
+			},
+			"snmp_transport": schema.StringAttribute{
+				Description: "The default SNMP transport for devices at this site, for example \"udp\".",
+				Optional:    true,
+				Computed:    true,
+			},
+			"agent_token_id": schema.StringAttribute{
+				Description: "The ID of the agent token that polls this site.",
+				Optional:    true,
+				Computed:    true,
+			},
+			"parent_site_id": schema.StringAttribute{
+				Description: "The ID of the parent site, for nesting sites into a hierarchy.",
+				Optional:    true,
 			},
 			"inserted_at": schema.StringAttribute{
 				Description: "The timestamp when the site was created.",
@@ -124,9 +170,7 @@ func (r *SiteResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	data.ID = types.StringValue(created.ID)
-	data.InsertedAt = types.StringValue(created.InsertedAt)
-	setSiteOptionalFields(&data, created)
+	applySiteResponseToPlan(&data, created)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -150,9 +194,7 @@ func (r *SiteResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		return
 	}
 
-	data.Name = types.StringValue(site.Name)
-	data.InsertedAt = types.StringValue(site.InsertedAt)
-	setSiteOptionalFields(&data, site)
+	applySiteResponse(&data, site)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -176,10 +218,7 @@ func (r *SiteResource) Update(ctx context.Context, req resource.UpdateRequest, r
 				resp.Diagnostics.AddError("Failed to create site (after 404 on update)", createErr.Error())
 				return
 			}
-			data.ID = types.StringValue(created.ID)
-			data.InsertedAt = types.StringValue(created.InsertedAt)
-			data.Name = types.StringValue(created.Name)
-			setSiteOptionalFields(&data, created)
+			applySiteResponseToPlan(&data, created)
 			resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 			return
 		}
@@ -187,8 +226,7 @@ func (r *SiteResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	data.Name = types.StringValue(updated.Name)
-	setSiteOptionalFields(&data, updated)
+	applySiteResponseToPlan(&data, updated)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -218,55 +256,143 @@ func buildSiteFromModel(data *SiteResourceModel) Site {
 		Name: data.Name.ValueString(),
 	}
 
-	if !data.Location.IsNull() {
+	if !data.Description.IsNull() && !data.Description.IsUnknown() {
+		v := data.Description.ValueString()
+		site.Description = &v
+	}
+	if !data.Location.IsNull() && !data.Location.IsUnknown() {
 		v := data.Location.ValueString()
 		site.Location = &v
 	}
-	if !data.Address.IsNull() {
+	if !data.Address.IsNull() && !data.Address.IsUnknown() {
 		v := data.Address.ValueString()
 		site.Address = &v
 	}
-	if !data.Latitude.IsNull() {
+	if !data.Latitude.IsNull() && !data.Latitude.IsUnknown() {
 		v := data.Latitude.ValueFloat64()
 		site.Latitude = &v
 	}
-	if !data.Longitude.IsNull() {
+	if !data.Longitude.IsNull() && !data.Longitude.IsUnknown() {
 		v := data.Longitude.ValueFloat64()
 		site.Longitude = &v
 	}
-	if !data.SNMPCommunity.IsNull() {
+	if !data.DisplayOrder.IsNull() && !data.DisplayOrder.IsUnknown() {
+		v := int(data.DisplayOrder.ValueInt64())
+		site.DisplayOrder = &v
+	}
+	if !data.SNMPCommunity.IsNull() && !data.SNMPCommunity.IsUnknown() {
 		v := data.SNMPCommunity.ValueString()
 		site.SNMPCommunity = &v
+	}
+	if !data.SNMPVersion.IsNull() && !data.SNMPVersion.IsUnknown() {
+		v := data.SNMPVersion.ValueString()
+		site.SNMPVersion = &v
+	}
+	if !data.SNMPPort.IsNull() && !data.SNMPPort.IsUnknown() {
+		v := int(data.SNMPPort.ValueInt64())
+		site.SNMPPort = &v
+	}
+	if !data.SNMPTransport.IsNull() && !data.SNMPTransport.IsUnknown() {
+		v := data.SNMPTransport.ValueString()
+		site.SNMPTransport = &v
+	}
+	if !data.AgentTokenID.IsNull() && !data.AgentTokenID.IsUnknown() {
+		v := data.AgentTokenID.ValueString()
+		site.AgentTokenID = &v
+	}
+	if !data.ParentSiteID.IsNull() && !data.ParentSiteID.IsUnknown() {
+		v := data.ParentSiteID.ValueString()
+		site.ParentSiteID = &v
 	}
 
 	return site
 }
 
-// setSiteOptionalFields maps API response optional fields back to the Terraform model.
-func setSiteOptionalFields(data *SiteResourceModel, site *Site) {
-	if site.Location != nil {
-		data.Location = types.StringValue(*site.Location)
-	} else {
-		data.Location = types.StringNull()
+// applySiteResponse maps every returned field of an API response onto the
+// model. It is used by Read, where a value that differs from the configuration
+// is real drift and must land in state.
+//
+// SNMPCommunity is never touched: the API does not return it, so the prior
+// state value stays and only SNMPCommunitySet reflects the server.
+func applySiteResponse(data *SiteResourceModel, site *Site) {
+	data.ID = types.StringValue(site.ID)
+	data.Name = types.StringValue(site.Name)
+	data.InsertedAt = types.StringValue(site.InsertedAt)
+	data.SNMPCommunitySet = types.BoolValue(site.SNMPCommunitySet)
+
+	data.Description = siteStringState(site.Description)
+	data.Location = siteStringState(site.Location)
+	data.Address = siteStringState(site.Address)
+	data.Latitude = siteFloat64State(site.Latitude)
+	data.Longitude = siteFloat64State(site.Longitude)
+	data.DisplayOrder = siteInt64State(site.DisplayOrder)
+	data.SNMPVersion = siteStringState(site.SNMPVersion)
+	data.SNMPPort = siteInt64State(site.SNMPPort)
+	data.SNMPTransport = siteStringState(site.SNMPTransport)
+	data.AgentTokenID = siteStringState(site.AgentTokenID)
+	data.ParentSiteID = siteStringState(site.ParentSiteID)
+}
+
+// applySiteResponseToPlan fills in the values Terraform does not already know,
+// and only those. Create and Update must return exactly the planned value for
+// every attribute whose plan is known, otherwise Terraform reports "Provider
+// produced inconsistent result after apply". An Optional and Computed
+// attribute therefore only takes its value from the response when the plan
+// left it null or unknown; purely computed attributes always take it.
+//
+// SNMPCommunity is write only and never assigned from a response.
+func applySiteResponseToPlan(data *SiteResourceModel, site *Site) {
+	data.ID = types.StringValue(site.ID)
+	data.InsertedAt = types.StringValue(site.InsertedAt)
+	data.SNMPCommunitySet = types.BoolValue(site.SNMPCommunitySet)
+
+	if siteValueUnset(data.Latitude) {
+		data.Latitude = siteFloat64State(site.Latitude)
 	}
-	if site.Address != nil {
-		data.Address = types.StringValue(*site.Address)
-	} else {
-		data.Address = types.StringNull()
+	if siteValueUnset(data.Longitude) {
+		data.Longitude = siteFloat64State(site.Longitude)
 	}
-	if site.Latitude != nil {
-		data.Latitude = types.Float64Value(*site.Latitude)
-	} else {
-		data.Latitude = types.Float64Null()
+	if siteValueUnset(data.DisplayOrder) {
+		data.DisplayOrder = siteInt64State(site.DisplayOrder)
 	}
-	if site.Longitude != nil {
-		data.Longitude = types.Float64Value(*site.Longitude)
-	} else {
-		data.Longitude = types.Float64Null()
+	if siteValueUnset(data.SNMPVersion) {
+		data.SNMPVersion = siteStringState(site.SNMPVersion)
 	}
-	if site.SNMPCommunity != nil {
-		data.SNMPCommunity = types.StringValue(*site.SNMPCommunity)
-	} else {
-		data.SNMPCommunity = types.StringNull()
+	if siteValueUnset(data.SNMPPort) {
+		data.SNMPPort = siteInt64State(site.SNMPPort)
 	}
+	if siteValueUnset(data.SNMPTransport) {
+		data.SNMPTransport = siteStringState(site.SNMPTransport)
+	}
+	if siteValueUnset(data.AgentTokenID) {
+		data.AgentTokenID = siteStringState(site.AgentTokenID)
+	}
+}
+
+// siteValueUnset reports whether Terraform has no known value for an
+// attribute, which is the only case where a response value may be adopted
+// during Create or Update.
+func siteValueUnset(value attr.Value) bool {
+	return value.IsNull() || value.IsUnknown()
+}
+
+func siteStringState(value *string) types.String {
+	if value == nil {
+		return types.StringNull()
+	}
+	return types.StringValue(*value)
+}
+
+func siteFloat64State(value *float64) types.Float64 {
+	if value == nil {
+		return types.Float64Null()
+	}
+	return types.Float64Value(*value)
+}
+
+func siteInt64State(value *int) types.Int64 {
+	if value == nil {
+		return types.Int64Null()
+	}
+	return types.Int64Value(int64(*value))
 }

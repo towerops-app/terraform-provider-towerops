@@ -8,6 +8,10 @@ description: |-
 
 Manages a TowerOps escalation policy. Escalation policies define how alerts are routed through a series of notification rules when they are not acknowledged.
 
+~> **Note:** Escalation rules and their targets are managed through separate nested endpoints (`POST /api/v1/escalation_policies/:id/rules` and `POST /api/v1/escalation_policies/:id/rules/:rule_id/targets`) that this provider does not expose yet. A policy created here has no rules until they are added in the TowerOps UI, and an alert routed to a policy without rules notifies nobody.
+
+~> **Note:** `handoff_notifications_mode` is not exposed. The API accepts it on write but never returns it, so Terraform could not read the applied value back and every plan would report perpetual drift.
+
 ## Example Usage
 
 ### Basic Escalation Policy

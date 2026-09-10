@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -26,24 +27,27 @@ type DeviceResource struct {
 
 // DeviceResourceModel describes the resource data model.
 type DeviceResourceModel struct {
-	ID                  types.String `tfsdk:"id"`
-	SiteID              types.String `tfsdk:"site_id"`
-	OrganizationID      types.String `tfsdk:"organization_id"`
-	Name                types.String `tfsdk:"name"`
-	IPAddress           types.String `tfsdk:"ip_address"`
-	Description         types.String `tfsdk:"description"`
-	MonitoringEnabled   types.Bool   `tfsdk:"monitoring_enabled"`
-	SNMPEnabled         types.Bool   `tfsdk:"snmp_enabled"`
-	SNMPVersion         types.String `tfsdk:"snmp_version"`
-	SNMPPort            types.Int64  `tfsdk:"snmp_port"`
-	DeviceRole          types.String `tfsdk:"device_role"`
-	SNMPv3SecurityLevel types.String `tfsdk:"snmpv3_security_level"`
-	SNMPv3Username      types.String `tfsdk:"snmpv3_username"`
-	SNMPv3AuthProtocol  types.String `tfsdk:"snmpv3_auth_protocol"`
-	SNMPv3AuthPassword  types.String `tfsdk:"snmpv3_auth_password"`
-	SNMPv3PrivProtocol  types.String `tfsdk:"snmpv3_priv_protocol"`
-	SNMPv3PrivPassword  types.String `tfsdk:"snmpv3_priv_password"`
-	InsertedAt          types.String `tfsdk:"inserted_at"`
+	ID                    types.String `tfsdk:"id"`
+	SiteID                types.String `tfsdk:"site_id"`
+	OrganizationID        types.String `tfsdk:"organization_id"`
+	Name                  types.String `tfsdk:"name"`
+	IPAddress             types.String `tfsdk:"ip_address"`
+	Description           types.String `tfsdk:"description"`
+	MonitoringEnabled     types.Bool   `tfsdk:"monitoring_enabled"`
+	CheckIntervalSeconds  types.Int64  `tfsdk:"check_interval_seconds"`
+	SNMPEnabled           types.Bool   `tfsdk:"snmp_enabled"`
+	SNMPVersion           types.String `tfsdk:"snmp_version"`
+	SNMPPort              types.Int64  `tfsdk:"snmp_port"`
+	DeviceRole            types.String `tfsdk:"device_role"`
+	SNMPv3SecurityLevel   types.String `tfsdk:"snmpv3_security_level"`
+	SNMPv3Username        types.String `tfsdk:"snmpv3_username"`
+	SNMPv3AuthProtocol    types.String `tfsdk:"snmpv3_auth_protocol"`
+	SNMPv3AuthPassword    types.String `tfsdk:"snmpv3_auth_password"`
+	SNMPv3AuthPasswordSet types.Bool   `tfsdk:"snmpv3_auth_password_set"`
+	SNMPv3PrivProtocol    types.String `tfsdk:"snmpv3_priv_protocol"`
+	SNMPv3PrivPassword    types.String `tfsdk:"snmpv3_priv_password"`
+	SNMPv3PrivPasswordSet types.Bool   `tfsdk:"snmpv3_priv_password_set"`
+	InsertedAt            types.String `tfsdk:"inserted_at"`
 }
 
 // NewDeviceResource creates a new device resource.
@@ -102,6 +106,12 @@ func (r *DeviceResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Computed:    true,
 				Default:     booldefault.StaticBool(true),
 			},
+			"check_interval_seconds": schema.Int64Attribute{
+				Description: "How often the device is checked, in seconds. The API accepts 300 to 3600 inclusive and rejects anything outside that range.",
+				Optional:    true,
+				Computed:    true,
+				Default:     int64default.StaticInt64(300),
+			},
 			"snmp_enabled": schema.BoolAttribute{
 				Description: "Whether SNMP polling is enabled for this device.",
 				Optional:    true,
@@ -121,7 +131,7 @@ func (r *DeviceResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Default:     int64default.StaticInt64(161),
 			},
 			"device_role": schema.StringAttribute{
-				Description: "The device type/role. Valid values: server, switch, router, access_point, backhaul, other. Defaults to 'other' if not specified.",
+				Description: "The device role. Valid values: router, switch, access_point, backhaul, server, other. Defaults to 'other' if not specified.",
 				Optional:    true,
 				Computed:    true,
 			},
@@ -138,18 +148,26 @@ func (r *DeviceResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Optional:    true,
 			},
 			"snmpv3_auth_password": schema.StringAttribute{
-				Description: "SNMPv3 authentication password. Only used when snmp_version is '3'.",
+				Description: "SNMPv3 authentication password. Only used when snmp_version is '3'. Write-only: the API accepts it but never returns it, so its state always mirrors the configuration. Watch snmpv3_auth_password_set to see whether the API holds one.",
 				Optional:    true,
 				Sensitive:   true,
+			},
+			"snmpv3_auth_password_set": schema.BoolAttribute{
+				Description: "Whether the API currently holds an SNMPv3 authentication password for this device.",
+				Computed:    true,
 			},
 			"snmpv3_priv_protocol": schema.StringAttribute{
 				Description: "SNMPv3 privacy protocol (DES, AES, AES-192, AES-256). Only used when snmp_version is '3'.",
 				Optional:    true,
 			},
 			"snmpv3_priv_password": schema.StringAttribute{
-				Description: "SNMPv3 privacy password. Only used when snmp_version is '3'.",
+				Description: "SNMPv3 privacy password. Only used when snmp_version is '3'. Write-only: the API accepts it but never returns it, so its state always mirrors the configuration. Watch snmpv3_priv_password_set to see whether the API holds one.",
 				Optional:    true,
 				Sensitive:   true,
+			},
+			"snmpv3_priv_password_set": schema.BoolAttribute{
+				Description: "Whether the API currently holds an SNMPv3 privacy password for this device.",
+				Computed:    true,
 			},
 			"inserted_at": schema.StringAttribute{
 				Description: "The timestamp when the device was created.",
@@ -171,12 +189,187 @@ func (r *DeviceResource) Configure(ctx context.Context, req resource.ConfigureRe
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *Client, got: %T", req.ProviderData),
+			fmt.Sprintf("Expected *Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
 
 	r.client = client
+}
+
+// deviceValueKnown reports whether an attribute carries a real value, as
+// opposed to null or a value Terraform has not resolved yet.
+func deviceValueKnown(value attr.Value) bool {
+	return !value.IsNull() && !value.IsUnknown()
+}
+
+// deviceStringOrNull turns an optional API string into an attribute value.
+func deviceStringOrNull(value *string) types.String {
+	if value == nil {
+		return types.StringNull()
+	}
+	return types.StringValue(*value)
+}
+
+// toAPI builds the request payload from the planned values. An unknown value
+// is never sent: the API would read it as an empty string or a zero.
+func (m *DeviceResourceModel) toAPI() Device {
+	device := Device{
+		IPAddress: m.IPAddress.ValueString(),
+	}
+
+	if deviceValueKnown(m.SiteID) {
+		siteID := m.SiteID.ValueString()
+		device.SiteID = &siteID
+	}
+
+	if deviceValueKnown(m.OrganizationID) {
+		orgID := m.OrganizationID.ValueString()
+		device.OrganizationID = &orgID
+	}
+
+	if deviceValueKnown(m.Name) {
+		name := m.Name.ValueString()
+		device.Name = &name
+	}
+
+	if deviceValueKnown(m.Description) {
+		desc := m.Description.ValueString()
+		device.Description = &desc
+	}
+
+	if deviceValueKnown(m.DeviceRole) {
+		role := m.DeviceRole.ValueString()
+		device.DeviceRole = &role
+	}
+
+	if deviceValueKnown(m.MonitoringEnabled) {
+		enabled := m.MonitoringEnabled.ValueBool()
+		device.MonitoringEnabled = &enabled
+	}
+
+	if deviceValueKnown(m.CheckIntervalSeconds) {
+		interval := int(m.CheckIntervalSeconds.ValueInt64())
+		device.CheckIntervalSeconds = &interval
+	}
+
+	if deviceValueKnown(m.SNMPEnabled) {
+		enabled := m.SNMPEnabled.ValueBool()
+		device.SNMPEnabled = &enabled
+	}
+
+	// Only send SNMP config when SNMP is enabled.
+	if m.SNMPEnabled.ValueBool() {
+		if deviceValueKnown(m.SNMPVersion) {
+			version := m.SNMPVersion.ValueString()
+			device.SNMPVersion = &version
+		}
+
+		if deviceValueKnown(m.SNMPPort) {
+			port := int(m.SNMPPort.ValueInt64())
+			device.SNMPPort = &port
+		}
+
+		// SNMPv3 fields
+		if deviceValueKnown(m.SNMPv3SecurityLevel) {
+			level := m.SNMPv3SecurityLevel.ValueString()
+			device.SNMPv3SecurityLevel = &level
+		}
+
+		if deviceValueKnown(m.SNMPv3Username) {
+			username := m.SNMPv3Username.ValueString()
+			device.SNMPv3Username = &username
+		}
+
+		if deviceValueKnown(m.SNMPv3AuthProtocol) {
+			protocol := m.SNMPv3AuthProtocol.ValueString()
+			device.SNMPv3AuthProtocol = &protocol
+		}
+
+		if deviceValueKnown(m.SNMPv3AuthPassword) {
+			password := m.SNMPv3AuthPassword.ValueString()
+			device.SNMPv3AuthPassword = &password
+		}
+
+		if deviceValueKnown(m.SNMPv3PrivProtocol) {
+			protocol := m.SNMPv3PrivProtocol.ValueString()
+			device.SNMPv3PrivProtocol = &protocol
+		}
+
+		if deviceValueKnown(m.SNMPv3PrivPassword) {
+			password := m.SNMPv3PrivPassword.ValueString()
+			device.SNMPv3PrivPassword = &password
+		}
+	}
+
+	return device
+}
+
+// applyWriteResponse folds a create or update response into the model.
+//
+// A planned value that is already known is authoritative: Terraform fails the
+// apply with "Provider produced inconsistent result after apply" if the
+// provider stores anything else, so only attributes whose planned value is
+// still null or unknown take their value from the response. Drift is reported
+// by Read instead, which is free to differ from the prior state.
+//
+// ip_address, description and the SNMPv3 strings are never copied: their
+// planned value is always known. The two SNMPv3 passwords are write-only, so
+// the response carries only the companion *_set booleans.
+func (m *DeviceResourceModel) applyWriteResponse(device *Device) {
+	if !deviceValueKnown(m.ID) {
+		m.ID = types.StringValue(device.ID)
+	}
+
+	if !deviceValueKnown(m.InsertedAt) {
+		m.InsertedAt = types.StringValue(device.InsertedAt)
+	}
+
+	if !deviceValueKnown(m.SiteID) {
+		m.SiteID = deviceStringOrNull(device.SiteID)
+	}
+
+	if !deviceValueKnown(m.OrganizationID) {
+		m.OrganizationID = deviceStringOrNull(device.OrganizationID)
+	}
+
+	if !deviceValueKnown(m.Name) {
+		m.Name = deviceStringOrNull(device.Name)
+	}
+
+	if !deviceValueKnown(m.DeviceRole) {
+		m.DeviceRole = deviceStringOrNull(device.DeviceRole)
+	}
+
+	if !deviceValueKnown(m.MonitoringEnabled) && device.MonitoringEnabled != nil {
+		m.MonitoringEnabled = types.BoolValue(*device.MonitoringEnabled)
+	}
+
+	// The create response (format_device/1) leaves check_interval_seconds out,
+	// so a nil here means "not reported", not "zero".
+	if !deviceValueKnown(m.CheckIntervalSeconds) && device.CheckIntervalSeconds != nil {
+		m.CheckIntervalSeconds = types.Int64Value(int64(*device.CheckIntervalSeconds))
+	}
+
+	if !deviceValueKnown(m.SNMPEnabled) && device.SNMPEnabled != nil {
+		m.SNMPEnabled = types.BoolValue(*device.SNMPEnabled)
+	}
+
+	if !deviceValueKnown(m.SNMPVersion) && device.SNMPVersion != nil {
+		m.SNMPVersion = types.StringValue(*device.SNMPVersion)
+	}
+
+	if !deviceValueKnown(m.SNMPPort) && device.SNMPPort != nil {
+		m.SNMPPort = types.Int64Value(int64(*device.SNMPPort))
+	}
+
+	if !deviceValueKnown(m.SNMPv3AuthPasswordSet) {
+		m.SNMPv3AuthPasswordSet = types.BoolValue(device.SNMPv3AuthPasswordSet)
+	}
+
+	if !deviceValueKnown(m.SNMPv3PrivPasswordSet) {
+		m.SNMPv3PrivPasswordSet = types.BoolValue(device.SNMPv3PrivPasswordSet)
+	}
 }
 
 func (r *DeviceResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -187,126 +380,13 @@ func (r *DeviceResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	device := Device{
-		IPAddress: data.IPAddress.ValueString(),
-	}
-
-	if !data.SiteID.IsNull() {
-		siteID := data.SiteID.ValueString()
-		device.SiteID = &siteID
-	}
-
-	if !data.OrganizationID.IsNull() {
-		orgID := data.OrganizationID.ValueString()
-		device.OrganizationID = &orgID
-	}
-
-	if !data.Name.IsNull() {
-		name := data.Name.ValueString()
-		device.Name = &name
-	}
-
-	if !data.Description.IsNull() {
-		desc := data.Description.ValueString()
-		device.Description = &desc
-	}
-
-	if !data.DeviceRole.IsNull() {
-		role := data.DeviceRole.ValueString()
-		device.DeviceRole = &role
-	}
-
-	if !data.MonitoringEnabled.IsNull() {
-		enabled := data.MonitoringEnabled.ValueBool()
-		device.MonitoringEnabled = &enabled
-	}
-
-	if !data.SNMPEnabled.IsNull() {
-		enabled := data.SNMPEnabled.ValueBool()
-		device.SNMPEnabled = &enabled
-	}
-
-	// Only send SNMP config when SNMP is enabled
-	if data.SNMPEnabled.ValueBool() {
-		if !data.SNMPVersion.IsNull() {
-			version := data.SNMPVersion.ValueString()
-			device.SNMPVersion = &version
-		}
-
-		if !data.SNMPPort.IsNull() {
-			port := int(data.SNMPPort.ValueInt64())
-			device.SNMPPort = &port
-		}
-
-		// SNMPv3 fields
-		if !data.SNMPv3SecurityLevel.IsNull() {
-			level := data.SNMPv3SecurityLevel.ValueString()
-			device.SNMPv3SecurityLevel = &level
-		}
-
-		if !data.SNMPv3Username.IsNull() {
-			username := data.SNMPv3Username.ValueString()
-			device.SNMPv3Username = &username
-		}
-
-		if !data.SNMPv3AuthProtocol.IsNull() {
-			protocol := data.SNMPv3AuthProtocol.ValueString()
-			device.SNMPv3AuthProtocol = &protocol
-		}
-
-		if !data.SNMPv3AuthPassword.IsNull() {
-			password := data.SNMPv3AuthPassword.ValueString()
-			device.SNMPv3AuthPassword = &password
-		}
-
-		if !data.SNMPv3PrivProtocol.IsNull() {
-			protocol := data.SNMPv3PrivProtocol.ValueString()
-			device.SNMPv3PrivProtocol = &protocol
-		}
-
-		if !data.SNMPv3PrivPassword.IsNull() {
-			password := data.SNMPv3PrivPassword.ValueString()
-			device.SNMPv3PrivPassword = &password
-		}
-	}
-
-	created, err := r.client.CreateDevice(device)
+	created, err := r.client.CreateDevice(data.toAPI())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create device", err.Error())
 		return
 	}
 
-	data.ID = types.StringValue(created.ID)
-	data.InsertedAt = types.StringValue(created.InsertedAt)
-
-	if created.SiteID != nil {
-		data.SiteID = types.StringValue(*created.SiteID)
-	} else {
-		data.SiteID = types.StringNull()
-	}
-
-	if created.OrganizationID != nil {
-		data.OrganizationID = types.StringValue(*created.OrganizationID)
-	} else {
-		data.OrganizationID = types.StringNull()
-	}
-
-	if created.Name != nil {
-		data.Name = types.StringValue(*created.Name)
-	}
-
-	if created.DeviceRole != nil {
-		data.DeviceRole = types.StringValue(*created.DeviceRole)
-	} else {
-		data.DeviceRole = types.StringNull()
-	}
-
-	if created.MonitoringEnabled != nil {
-		data.MonitoringEnabled = types.BoolValue(*created.MonitoringEnabled)
-	}
-	if created.SNMPEnabled != nil {
-		data.SNMPEnabled = types.BoolValue(*created.SNMPEnabled)
-	}
+	data.applyWriteResponse(created)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -330,41 +410,20 @@ func (r *DeviceResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	if device.SiteID != nil {
-		data.SiteID = types.StringValue(*device.SiteID)
-	} else {
-		data.SiteID = types.StringNull()
-	}
-
-	if device.OrganizationID != nil {
-		data.OrganizationID = types.StringValue(*device.OrganizationID)
-	} else {
-		data.OrganizationID = types.StringNull()
-	}
-
+	data.SiteID = deviceStringOrNull(device.SiteID)
+	data.OrganizationID = deviceStringOrNull(device.OrganizationID)
 	data.IPAddress = types.StringValue(device.IPAddress)
-
-	if device.Name != nil {
-		data.Name = types.StringValue(*device.Name)
-	} else {
-		data.Name = types.StringNull()
-	}
+	data.Name = deviceStringOrNull(device.Name)
+	data.Description = deviceStringOrNull(device.Description)
 	data.InsertedAt = types.StringValue(device.InsertedAt)
-
-	if device.Description != nil {
-		data.Description = types.StringValue(*device.Description)
-	} else {
-		data.Description = types.StringNull()
-	}
-
-	if device.DeviceRole != nil {
-		data.DeviceRole = types.StringValue(*device.DeviceRole)
-	} else {
-		data.DeviceRole = types.StringNull()
-	}
+	data.DeviceRole = deviceStringOrNull(device.DeviceRole)
 
 	if device.MonitoringEnabled != nil {
 		data.MonitoringEnabled = types.BoolValue(*device.MonitoringEnabled)
+	}
+
+	if device.CheckIntervalSeconds != nil {
+		data.CheckIntervalSeconds = types.Int64Value(int64(*device.CheckIntervalSeconds))
 	}
 
 	if device.SNMPEnabled != nil {
@@ -379,42 +438,15 @@ func (r *DeviceResource) Read(ctx context.Context, req resource.ReadRequest, res
 		data.SNMPPort = types.Int64Value(int64(*device.SNMPPort))
 	}
 
-	// SNMPv3 fields
-	if device.SNMPv3SecurityLevel != nil {
-		data.SNMPv3SecurityLevel = types.StringValue(*device.SNMPv3SecurityLevel)
-	} else {
-		data.SNMPv3SecurityLevel = types.StringNull()
-	}
-
-	if device.SNMPv3Username != nil {
-		data.SNMPv3Username = types.StringValue(*device.SNMPv3Username)
-	} else {
-		data.SNMPv3Username = types.StringNull()
-	}
-
-	if device.SNMPv3AuthProtocol != nil {
-		data.SNMPv3AuthProtocol = types.StringValue(*device.SNMPv3AuthProtocol)
-	} else {
-		data.SNMPv3AuthProtocol = types.StringNull()
-	}
-
-	if device.SNMPv3AuthPassword != nil {
-		data.SNMPv3AuthPassword = types.StringValue(*device.SNMPv3AuthPassword)
-	} else {
-		data.SNMPv3AuthPassword = types.StringNull()
-	}
-
-	if device.SNMPv3PrivProtocol != nil {
-		data.SNMPv3PrivProtocol = types.StringValue(*device.SNMPv3PrivProtocol)
-	} else {
-		data.SNMPv3PrivProtocol = types.StringNull()
-	}
-
-	if device.SNMPv3PrivPassword != nil {
-		data.SNMPv3PrivPassword = types.StringValue(*device.SNMPv3PrivPassword)
-	} else {
-		data.SNMPv3PrivPassword = types.StringNull()
-	}
+	// SNMPv3 fields. The two passwords are write-only: the API never returns
+	// them, so the configured value stays untouched and the *_set booleans
+	// carry the drift instead.
+	data.SNMPv3SecurityLevel = deviceStringOrNull(device.SNMPv3SecurityLevel)
+	data.SNMPv3Username = deviceStringOrNull(device.SNMPv3Username)
+	data.SNMPv3AuthProtocol = deviceStringOrNull(device.SNMPv3AuthProtocol)
+	data.SNMPv3AuthPasswordSet = types.BoolValue(device.SNMPv3AuthPasswordSet)
+	data.SNMPv3PrivProtocol = deviceStringOrNull(device.SNMPv3PrivProtocol)
+	data.SNMPv3PrivPasswordSet = types.BoolValue(device.SNMPv3PrivPasswordSet)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -427,88 +459,7 @@ func (r *DeviceResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 
-	device := Device{
-		IPAddress: data.IPAddress.ValueString(),
-	}
-
-	if !data.SiteID.IsNull() {
-		siteID := data.SiteID.ValueString()
-		device.SiteID = &siteID
-	}
-
-	if !data.OrganizationID.IsNull() {
-		orgID := data.OrganizationID.ValueString()
-		device.OrganizationID = &orgID
-	}
-
-	if !data.Name.IsNull() {
-		name := data.Name.ValueString()
-		device.Name = &name
-	}
-
-	if !data.Description.IsNull() {
-		desc := data.Description.ValueString()
-		device.Description = &desc
-	}
-
-	if !data.DeviceRole.IsNull() {
-		role := data.DeviceRole.ValueString()
-		device.DeviceRole = &role
-	}
-
-	if !data.MonitoringEnabled.IsNull() {
-		enabled := data.MonitoringEnabled.ValueBool()
-		device.MonitoringEnabled = &enabled
-	}
-
-	if !data.SNMPEnabled.IsNull() {
-		enabled := data.SNMPEnabled.ValueBool()
-		device.SNMPEnabled = &enabled
-	}
-
-	// Only send SNMP config when SNMP is enabled
-	if data.SNMPEnabled.ValueBool() {
-		if !data.SNMPVersion.IsNull() {
-			version := data.SNMPVersion.ValueString()
-			device.SNMPVersion = &version
-		}
-
-		if !data.SNMPPort.IsNull() {
-			port := int(data.SNMPPort.ValueInt64())
-			device.SNMPPort = &port
-		}
-
-		// SNMPv3 fields
-		if !data.SNMPv3SecurityLevel.IsNull() {
-			level := data.SNMPv3SecurityLevel.ValueString()
-			device.SNMPv3SecurityLevel = &level
-		}
-
-		if !data.SNMPv3Username.IsNull() {
-			username := data.SNMPv3Username.ValueString()
-			device.SNMPv3Username = &username
-		}
-
-		if !data.SNMPv3AuthProtocol.IsNull() {
-			protocol := data.SNMPv3AuthProtocol.ValueString()
-			device.SNMPv3AuthProtocol = &protocol
-		}
-
-		if !data.SNMPv3AuthPassword.IsNull() {
-			password := data.SNMPv3AuthPassword.ValueString()
-			device.SNMPv3AuthPassword = &password
-		}
-
-		if !data.SNMPv3PrivProtocol.IsNull() {
-			protocol := data.SNMPv3PrivProtocol.ValueString()
-			device.SNMPv3PrivProtocol = &protocol
-		}
-
-		if !data.SNMPv3PrivPassword.IsNull() {
-			password := data.SNMPv3PrivPassword.ValueString()
-			device.SNMPv3PrivPassword = &password
-		}
-	}
+	device := data.toAPI()
 
 	updated, err := r.client.UpdateDevice(data.ID.ValueString(), device)
 	if err != nil {
@@ -519,45 +470,7 @@ func (r *DeviceResource) Update(ctx context.Context, req resource.UpdateRequest,
 				resp.Diagnostics.AddError("Failed to create device (after 404 on update)", createErr.Error())
 				return
 			}
-			data.ID = types.StringValue(created.ID)
-			data.InsertedAt = types.StringValue(created.InsertedAt)
-			data.IPAddress = types.StringValue(created.IPAddress)
-
-			if created.SiteID != nil {
-				data.SiteID = types.StringValue(*created.SiteID)
-			} else {
-				data.SiteID = types.StringNull()
-			}
-
-			if created.OrganizationID != nil {
-				data.OrganizationID = types.StringValue(*created.OrganizationID)
-			} else {
-				data.OrganizationID = types.StringNull()
-			}
-
-			if created.Name != nil {
-				data.Name = types.StringValue(*created.Name)
-			}
-			if created.Description != nil {
-				data.Description = types.StringValue(*created.Description)
-			}
-			if created.DeviceRole != nil {
-				data.DeviceRole = types.StringValue(*created.DeviceRole)
-			} else {
-				data.DeviceRole = types.StringNull()
-			}
-			if created.MonitoringEnabled != nil {
-				data.MonitoringEnabled = types.BoolValue(*created.MonitoringEnabled)
-			}
-			if created.SNMPEnabled != nil {
-				data.SNMPEnabled = types.BoolValue(*created.SNMPEnabled)
-			}
-			if created.SNMPVersion != nil {
-				data.SNMPVersion = types.StringValue(*created.SNMPVersion)
-			}
-			if created.SNMPPort != nil {
-				data.SNMPPort = types.Int64Value(int64(*created.SNMPPort))
-			}
+			data.applyWriteResponse(created)
 			resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 			return
 		}
@@ -565,80 +478,7 @@ func (r *DeviceResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 
-	data.IPAddress = types.StringValue(updated.IPAddress)
-
-	if updated.SiteID != nil {
-		data.SiteID = types.StringValue(*updated.SiteID)
-	} else {
-		data.SiteID = types.StringNull()
-	}
-
-	if updated.OrganizationID != nil {
-		data.OrganizationID = types.StringValue(*updated.OrganizationID)
-	} else {
-		data.OrganizationID = types.StringNull()
-	}
-
-	if updated.Name != nil {
-		data.Name = types.StringValue(*updated.Name)
-	}
-	if updated.Description != nil {
-		data.Description = types.StringValue(*updated.Description)
-	}
-	if updated.DeviceRole != nil {
-		data.DeviceRole = types.StringValue(*updated.DeviceRole)
-	} else {
-		data.DeviceRole = types.StringNull()
-	}
-	if updated.MonitoringEnabled != nil {
-		data.MonitoringEnabled = types.BoolValue(*updated.MonitoringEnabled)
-	}
-	if updated.SNMPEnabled != nil {
-		data.SNMPEnabled = types.BoolValue(*updated.SNMPEnabled)
-	}
-	if updated.SNMPVersion != nil {
-		data.SNMPVersion = types.StringValue(*updated.SNMPVersion)
-	}
-	if updated.SNMPPort != nil {
-		data.SNMPPort = types.Int64Value(int64(*updated.SNMPPort))
-	}
-
-	// SNMPv3 fields
-	if updated.SNMPv3SecurityLevel != nil {
-		data.SNMPv3SecurityLevel = types.StringValue(*updated.SNMPv3SecurityLevel)
-	} else {
-		data.SNMPv3SecurityLevel = types.StringNull()
-	}
-
-	if updated.SNMPv3Username != nil {
-		data.SNMPv3Username = types.StringValue(*updated.SNMPv3Username)
-	} else {
-		data.SNMPv3Username = types.StringNull()
-	}
-
-	if updated.SNMPv3AuthProtocol != nil {
-		data.SNMPv3AuthProtocol = types.StringValue(*updated.SNMPv3AuthProtocol)
-	} else {
-		data.SNMPv3AuthProtocol = types.StringNull()
-	}
-
-	if updated.SNMPv3AuthPassword != nil {
-		data.SNMPv3AuthPassword = types.StringValue(*updated.SNMPv3AuthPassword)
-	} else {
-		data.SNMPv3AuthPassword = types.StringNull()
-	}
-
-	if updated.SNMPv3PrivProtocol != nil {
-		data.SNMPv3PrivProtocol = types.StringValue(*updated.SNMPv3PrivProtocol)
-	} else {
-		data.SNMPv3PrivProtocol = types.StringNull()
-	}
-
-	if updated.SNMPv3PrivPassword != nil {
-		data.SNMPv3PrivPassword = types.StringValue(*updated.SNMPv3PrivPassword)
-	} else {
-		data.SNMPv3PrivPassword = types.StringNull()
-	}
+	data.applyWriteResponse(updated)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }

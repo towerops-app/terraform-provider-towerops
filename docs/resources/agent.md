@@ -10,6 +10,8 @@ Manages a TowerOps agent token. Agents are deployed on customer networks to poll
 
 ~> **Note:** The `token` attribute is only available after creation. If the state is lost, the agent must be deleted and recreated to obtain a new token.
 
+~> **Note:** The TowerOps API has no update action for agents. Changing `name` replaces the agent, which issues a new token, and every other attribute is read-only.
+
 ## Example Usage
 
 ### Basic Agent
@@ -43,6 +45,9 @@ output "agent_token" {
 
 - `id` (String) - The unique identifier of the agent.
 - `token` (String, Sensitive) - The bearer token for this agent. Only available after creation and cannot be retrieved again.
+- `last_ip` (String) - The source IP address the agent last checked in from. Null until the agent checks in.
+- `metadata` (Map of String) - Metadata the agent reported on its last check-in, such as its version and host details. The API sends an arbitrary JSON object, so values that are not strings (numbers, booleans, nested objects, arrays) are stored as their JSON encoding. Null when the agent has reported nothing.
+- `device_count` (Number) - The number of devices currently assigned to this agent. `0` for a newly created agent, since the create response does not report it.
 - `inserted_at` (String) - The timestamp when the agent was created.
 
 ## Import

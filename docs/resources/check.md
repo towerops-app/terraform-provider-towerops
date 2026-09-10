@@ -108,12 +108,13 @@ resource "towerops_check" "wan_ping" {
 ### Required
 
 - `name` (String) - The name of the check.
-- `check_type` (String) - The type of check: `http`, `tcp`, `dns`, or `ping`. Changing this forces a new resource.
+- `check_type` (String) - The type of check. The REST API accepts only `http`, `tcp`, `dns`, and `ping`; any other value is rejected with a 400 `bad_request`. Changing this forces a new resource.
 
 ### Optional
 
 - `description` (String) - A description of the check.
 - `enabled` (Boolean) - Whether the check is enabled. Default: `true`.
+- `alerting` (Boolean) - Whether the check raises alerts. Update-only: the create endpoint ignores this field and arms every new check, so `alerting = false` on a check that does not exist yet is applied on the next apply, once the check can be updated. Default: `true`.
 - `device_id` (String) - The ID of the device this check is associated with.
 - `agent_token_id` (String) - The ID of the agent token that executes this check.
 - `interval_seconds` (Number) - How often the check runs, in seconds. Default: `60`.
@@ -141,6 +142,7 @@ resource "towerops_check" "wan_ping" {
 
 - `hostname` (String) - The hostname to resolve. Required for DNS checks.
 - `record_type` (String) - DNS record type (`A`, `AAAA`, `CNAME`, `MX`, `TXT`, `NS`, `PTR`). Default: `"A"`.
+- `dns_server` (String) - The DNS server to query, sent as the `server` config key. Defaults to the resolver of the executing host.
 - `expected_result` (String) - Expected DNS resolution result.
 
 #### Ping Check Fields (used when `check_type = "ping"`)

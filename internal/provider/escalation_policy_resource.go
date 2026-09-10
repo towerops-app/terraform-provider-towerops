@@ -40,6 +40,16 @@ func (r *EscalationPolicyResource) Metadata(ctx context.Context, req resource.Me
 	resp.TypeName = req.ProviderTypeName + "_escalation_policy"
 }
 
+// Schema covers exactly the fields format_policy/1 serializes.
+//
+// handoff_notifications_mode is left out deliberately: EscalationPolicy's
+// changeset casts it, but the API never returns it, so Terraform could not
+// read the applied value back and every plan would report perpetual drift.
+//
+// Escalation rules and their targets are managed through separate nested
+// endpoints (POST /api/v1/escalation_policies/:id/rules and
+// .../rules/:rule_id/targets) that this provider does not expose yet, so a
+// policy created here has no rules until they are added in the TowerOps UI.
 func (r *EscalationPolicyResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Manages a TowerOps escalation policy.",
@@ -126,11 +136,16 @@ func (r *EscalationPolicyResource) Create(ctx context.Context, req resource.Crea
 	data.ID = types.StringValue(created.ID)
 	data.InsertedAt = types.StringValue(created.InsertedAt)
 
-	if created.Description != nil {
-		data.Description = types.StringValue(*created.Description)
-	}
-	if created.RepeatCount != nil {
-		data.RepeatCount = types.Int64Value(int64(*created.RepeatCount))
+	// description is optional without a default, so its state has to match the
+	// configuration exactly, and repeat_count is only taken from the response
+	// when the plan left it unset. Writing back a value the plan did not carry
+	// fails the apply with an inconsistent result.
+	if data.RepeatCount.IsNull() || data.RepeatCount.IsUnknown() {
+		if created.RepeatCount != nil {
+			data.RepeatCount = types.Int64Value(int64(*created.RepeatCount))
+		} else {
+			data.RepeatCount = types.Int64Null()
+		}
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -204,12 +219,12 @@ func (r *EscalationPolicyResource) Update(ctx context.Context, req resource.Upda
 			}
 			data.ID = types.StringValue(created.ID)
 			data.InsertedAt = types.StringValue(created.InsertedAt)
-			data.Name = types.StringValue(created.Name)
-			if created.Description != nil {
-				data.Description = types.StringValue(*created.Description)
-			}
-			if created.RepeatCount != nil {
-				data.RepeatCount = types.Int64Value(int64(*created.RepeatCount))
+			if data.RepeatCount.IsNull() || data.RepeatCount.IsUnknown() {
+				if created.RepeatCount != nil {
+					data.RepeatCount = types.Int64Value(int64(*created.RepeatCount))
+				} else {
+					data.RepeatCount = types.Int64Null()
+				}
 			}
 			resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 			return
@@ -218,13 +233,15 @@ func (r *EscalationPolicyResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 
-	data.Name = types.StringValue(updated.Name)
-
-	if updated.Description != nil {
-		data.Description = types.StringValue(*updated.Description)
-	}
-	if updated.RepeatCount != nil {
-		data.RepeatCount = types.Int64Value(int64(*updated.RepeatCount))
+	// name and description already hold their planned values, which are
+	// authoritative after apply, so only a repeat_count the plan left unset
+	// falls back to the response.
+	if data.RepeatCount.IsNull() || data.RepeatCount.IsUnknown() {
+		if updated.RepeatCount != nil {
+			data.RepeatCount = types.Int64Value(int64(*updated.RepeatCount))
+		} else {
+			data.RepeatCount = types.Int64Null()
+		}
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
