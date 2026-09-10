@@ -31,6 +31,7 @@ type CheckResourceModel struct {
 	CheckType            types.String `tfsdk:"check_type"`
 	Description          types.String `tfsdk:"description"`
 	Enabled              types.Bool   `tfsdk:"enabled"`
+	Alerting             types.Bool   `tfsdk:"alerting"`
 	DeviceID             types.String `tfsdk:"device_id"`
 	AgentTokenID         types.String `tfsdk:"agent_token_id"`
 	IntervalSeconds      types.Int64  `tfsdk:"interval_seconds"`
@@ -54,6 +55,7 @@ type CheckResourceModel struct {
 
 	// DNS config
 	Hostname       types.String `tfsdk:"hostname"`
+	DNSServer      types.String `tfsdk:"dns_server"`
 	RecordType     types.String `tfsdk:"record_type"`
 	ExpectedResult types.String `tfsdk:"expected_result"`
 
@@ -92,7 +94,7 @@ func (r *CheckResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				Required:    true,
 			},
 			"check_type": schema.StringAttribute{
-				Description: "The type of check: http, tcp, dns, or ping.",
+				Description: "The type of check. The REST API accepts only http, tcp, dns, and ping; any other value is rejected with a 400 bad_request.",
 				Required:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -107,6 +109,11 @@ func (r *CheckResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				Optional:    true,
 				Computed:    true,
 				Default:     booldefault.StaticBool(true),
+			},
+			"alerting": schema.BoolAttribute{
+				Description: "Whether the check raises alerts. The API ignores this at create time (a check is armed by default) and only honors it on update, so setting it to false on a new check takes effect on the following apply.",
+				Optional:    true,
+				Computed:    true,
 			},
 			"device_id": schema.StringAttribute{
 				Description: "The ID of the device this check is associated with.",
@@ -196,6 +203,10 @@ func (r *CheckResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			// DNS config
 			"hostname": schema.StringAttribute{
 				Description: "The hostname to resolve. Required for DNS checks.",
+				Optional:    true,
+			},
+			"dns_server": schema.StringAttribute{
+				Description: "The DNS server to query. Defaults to the resolver of the executing host.",
 				Optional:    true,
 			},
 			"record_type": schema.StringAttribute{
@@ -318,7 +329,7 @@ func (r *CheckResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	mapCheckToState(created, &data)
+	applyCheckToPlan(created, &data)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -368,6 +379,14 @@ func (r *CheckResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		check.Enabled = &enabled
 	}
 
+	// The create endpoint drops `alerting`, the update endpoint pops it out of
+	// the `check` object and routes it through its own arming path, so this is
+	// the only request that may carry it.
+	if !data.Alerting.IsNull() && !data.Alerting.IsUnknown() {
+		alerting := data.Alerting.ValueBool()
+		check.Alerting = &alerting
+	}
+
 	if !data.DeviceID.IsNull() {
 		id := data.DeviceID.ValueString()
 		check.DeviceID = &id
@@ -407,7 +426,7 @@ func (r *CheckResource) Update(ctx context.Context, req resource.UpdateRequest, 
 				resp.Diagnostics.AddError("Failed to create check (after 404 on update)", createErr.Error())
 				return
 			}
-			mapCheckToState(created, &data)
+			applyCheckToPlan(created, &data)
 			resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 			return
 		}
@@ -415,7 +434,7 @@ func (r *CheckResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	mapCheckToState(updated, &data)
+	applyCheckToPlan(updated, &data)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -485,6 +504,9 @@ func buildConfig(data CheckResourceModel) map[string]any {
 		if !data.RecordType.IsNull() {
 			config["record_type"] = data.RecordType.ValueString()
 		}
+		if !data.DNSServer.IsNull() {
+			config["server"] = data.DNSServer.ValueString()
+		}
 		if !data.ExpectedResult.IsNull() {
 			config["expected"] = data.ExpectedResult.ValueString()
 		}
@@ -518,6 +540,10 @@ func mapCheckToState(check *Check, data *CheckResourceModel) {
 		data.Enabled = types.BoolValue(*check.Enabled)
 	}
 
+	if check.Alerting != nil {
+		data.Alerting = types.BoolValue(*check.Alerting)
+	}
+
 	if check.DeviceID != nil {
 		data.DeviceID = types.StringValue(*check.DeviceID)
 	} else {
@@ -546,6 +572,38 @@ func mapCheckToState(check *Check, data *CheckResourceModel) {
 		data.MaxCheckAttempts = types.Int64Value(int64(*check.MaxCheckAttempts))
 	}
 
+	setCheckRuntimeState(check, data)
+
+	// Unpack config into flat fields based on check_type
+	unpackConfig(check.Config, check.CheckType, data)
+}
+
+// applyCheckToPlan fills the computed attributes of a planned model from an API
+// response. Planned values are authoritative: Terraform rejects an apply whose
+// result differs from a planned value that was already known, so nothing the
+// plan decided is overwritten here. Detecting drift is Read's job.
+func applyCheckToPlan(check *Check, data *CheckResourceModel) {
+	data.ID = types.StringValue(check.ID)
+	data.InsertedAt = types.StringValue(check.InsertedAt)
+
+	// `alerting` is the one optional attribute the API decides on its own: the
+	// create endpoint ignores whatever was sent and arms the check, so an
+	// unconfigured value is unknown in the plan and has to come from the
+	// response. A configured value stays as planned.
+	if data.Alerting.IsUnknown() || data.Alerting.IsNull() {
+		if check.Alerting != nil {
+			data.Alerting = types.BoolValue(*check.Alerting)
+		} else {
+			// Checks are armed unless something disarms them.
+			data.Alerting = types.BoolValue(true)
+		}
+	}
+
+	setCheckRuntimeState(check, data)
+}
+
+// setCheckRuntimeState maps the read-only execution state of a check.
+func setCheckRuntimeState(check *Check, data *CheckResourceModel) {
 	if check.CurrentState != nil {
 		data.CurrentState = types.Int64Value(int64(*check.CurrentState))
 	} else {
@@ -563,9 +621,6 @@ func mapCheckToState(check *Check, data *CheckResourceModel) {
 	} else {
 		data.LastCheckAt = types.StringNull()
 	}
-
-	// Unpack config into flat fields based on check_type
-	unpackConfig(check.Config, check.CheckType, data)
 }
 
 // unpackConfig reads the config map and sets flat Terraform attributes.
@@ -612,6 +667,9 @@ func unpackConfig(config map[string]any, checkType string, data *CheckResourceMo
 	case "dns":
 		if v, ok := config["hostname"].(string); ok {
 			data.Hostname = types.StringValue(v)
+		}
+		if v, ok := config["server"].(string); ok {
+			data.DNSServer = types.StringValue(v)
 		}
 		if v, ok := config["record_type"].(string); ok {
 			data.RecordType = types.StringValue(v)

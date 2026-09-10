@@ -95,6 +95,8 @@ func (p *ToweropsProvider) Resources(ctx context.Context) []func() resource.Reso
 		NewAgentResource,
 		NewIntegrationResource,
 		NewMaintenanceWindowResource,
+		NewCoverageResource,
+		NewWebhookEndpointResource,
 	}
 }
 

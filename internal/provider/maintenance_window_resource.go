@@ -29,6 +29,8 @@ type MaintenanceWindowResourceModel struct {
 	Reason         types.String `tfsdk:"reason"`
 	StartsAt       types.String `tfsdk:"starts_at"`
 	EndsAt         types.String `tfsdk:"ends_at"`
+	Recurring      types.Bool   `tfsdk:"recurring"`
+	RecurrenceRule types.String `tfsdk:"recurrence_rule"`
 	SuppressAlerts types.Bool   `tfsdk:"suppress_alerts"`
 	SiteID         types.String `tfsdk:"site_id"`
 	DeviceID       types.String `tfsdk:"device_id"`
@@ -70,6 +72,16 @@ func (r *MaintenanceWindowResource) Schema(ctx context.Context, req resource.Sch
 			"ends_at": schema.StringAttribute{
 				Description: "The end time of the maintenance window in ISO 8601 format (e.g. 2024-01-15T06:00:00Z).",
 				Required:    true,
+			},
+			"recurring": schema.BoolAttribute{
+				Description: "Whether the maintenance window repeats. Defaults to false.",
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+			},
+			"recurrence_rule": schema.StringAttribute{
+				Description: "The recurrence rule for a repeating window, expressed as an iCalendar RRULE string (e.g. FREQ=WEEKLY;BYDAY=SU). Only meaningful when recurring is true.",
+				Optional:    true,
 			},
 			"suppress_alerts": schema.BoolAttribute{
 				Description: "Whether to suppress alerts during the maintenance window. Defaults to true.",
@@ -132,7 +144,17 @@ func (r *MaintenanceWindowResource) Create(ctx context.Context, req resource.Cre
 		window.Reason = &reason
 	}
 
-	if !data.SuppressAlerts.IsNull() {
+	if !data.Recurring.IsNull() && !data.Recurring.IsUnknown() {
+		recurring := data.Recurring.ValueBool()
+		window.Recurring = &recurring
+	}
+
+	if !data.RecurrenceRule.IsNull() {
+		rule := data.RecurrenceRule.ValueString()
+		window.RecurrenceRule = &rule
+	}
+
+	if !data.SuppressAlerts.IsNull() && !data.SuppressAlerts.IsUnknown() {
 		suppress := data.SuppressAlerts.ValueBool()
 		window.SuppressAlerts = &suppress
 	}
@@ -156,7 +178,15 @@ func (r *MaintenanceWindowResource) Create(ctx context.Context, req resource.Cre
 	data.ID = types.StringValue(created.ID)
 	data.InsertedAt = types.StringValue(created.InsertedAt)
 
-	if created.SuppressAlerts != nil {
+	// recurring and suppress_alerts both carry a default, so their planned
+	// values are always known. Only fall back to the API response when the plan
+	// left them unset: overwriting a known planned value makes Terraform report
+	// an inconsistent result after apply. Drift is picked up by Read instead.
+	if (data.Recurring.IsNull() || data.Recurring.IsUnknown()) && created.Recurring != nil {
+		data.Recurring = types.BoolValue(*created.Recurring)
+	}
+
+	if (data.SuppressAlerts.IsNull() || data.SuppressAlerts.IsUnknown()) && created.SuppressAlerts != nil {
 		data.SuppressAlerts = types.BoolValue(*created.SuppressAlerts)
 	}
 
@@ -190,6 +220,16 @@ func (r *MaintenanceWindowResource) Read(ctx context.Context, req resource.ReadR
 		data.Reason = types.StringValue(*window.Reason)
 	} else {
 		data.Reason = types.StringNull()
+	}
+
+	if window.Recurring != nil {
+		data.Recurring = types.BoolValue(*window.Recurring)
+	}
+
+	if window.RecurrenceRule != nil {
+		data.RecurrenceRule = types.StringValue(*window.RecurrenceRule)
+	} else {
+		data.RecurrenceRule = types.StringNull()
 	}
 
 	if window.SuppressAlerts != nil {
@@ -230,7 +270,17 @@ func (r *MaintenanceWindowResource) Update(ctx context.Context, req resource.Upd
 		window.Reason = &reason
 	}
 
-	if !data.SuppressAlerts.IsNull() {
+	if !data.Recurring.IsNull() && !data.Recurring.IsUnknown() {
+		recurring := data.Recurring.ValueBool()
+		window.Recurring = &recurring
+	}
+
+	if !data.RecurrenceRule.IsNull() {
+		rule := data.RecurrenceRule.ValueString()
+		window.RecurrenceRule = &rule
+	}
+
+	if !data.SuppressAlerts.IsNull() && !data.SuppressAlerts.IsUnknown() {
 		suppress := data.SuppressAlerts.ValueBool()
 		window.SuppressAlerts = &suppress
 	}
@@ -255,7 +305,10 @@ func (r *MaintenanceWindowResource) Update(ctx context.Context, req resource.Upd
 			}
 			data.ID = types.StringValue(created.ID)
 			data.InsertedAt = types.StringValue(created.InsertedAt)
-			if created.SuppressAlerts != nil {
+			if (data.Recurring.IsNull() || data.Recurring.IsUnknown()) && created.Recurring != nil {
+				data.Recurring = types.BoolValue(*created.Recurring)
+			}
+			if (data.SuppressAlerts.IsNull() || data.SuppressAlerts.IsUnknown()) && created.SuppressAlerts != nil {
 				data.SuppressAlerts = types.BoolValue(*created.SuppressAlerts)
 			}
 			resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -265,11 +318,14 @@ func (r *MaintenanceWindowResource) Update(ctx context.Context, req resource.Upd
 		return
 	}
 
-	data.Name = types.StringValue(updated.Name)
-	data.StartsAt = types.StringValue(updated.StartsAt)
-	data.EndsAt = types.StringValue(updated.EndsAt)
+	// Every configured attribute already holds its planned value, which is
+	// authoritative here, so the update response is only consulted for the
+	// defaulted booleans the plan left unset.
+	if (data.Recurring.IsNull() || data.Recurring.IsUnknown()) && updated.Recurring != nil {
+		data.Recurring = types.BoolValue(*updated.Recurring)
+	}
 
-	if updated.SuppressAlerts != nil {
+	if (data.SuppressAlerts.IsNull() || data.SuppressAlerts.IsUnknown()) && updated.SuppressAlerts != nil {
 		data.SuppressAlerts = types.BoolValue(*updated.SuppressAlerts)
 	}
 

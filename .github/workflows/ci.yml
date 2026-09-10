@@ -48,6 +48,27 @@ jobs:
       - name: Test
         run: go test -race -count=1 ./...
 
+  acceptance:
+    name: Acceptance Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.14.5'
+          terraform_wrapper: false
+
+      # Every case drives an httptest mock server, so this needs a terraform
+      # binary but no TowerOps credentials and no network egress.
+      - name: Acceptance tests
+        env:
+          TF_ACC: '1'
+        run: go test -count=1 -timeout 30m ./internal/provider/...
+
   goreleaser:
     name: GoReleaser Dry Run
     runs-on: ubuntu-latest

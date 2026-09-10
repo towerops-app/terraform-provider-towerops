@@ -8,6 +8,8 @@ description: |-
 
 Manages a TowerOps on-call schedule. Schedules define rotation layers that determine who is on-call at any given time.
 
+~> **Note:** Layers, layer members and overrides are managed through separate nested endpoints (`POST /api/v1/schedules/:id/layers`, `POST /api/v1/schedules/:id/layers/:layer_id/members` and `POST /api/v1/schedules/:id/overrides`) that this provider does not expose yet. A schedule created here has no rotation, so nobody is on call, until layers and members are added in the TowerOps UI.
+
 ## Example Usage
 
 ### Basic Schedule

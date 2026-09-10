@@ -39,6 +39,13 @@ func (r *ScheduleResource) Metadata(ctx context.Context, req resource.MetadataRe
 	resp.TypeName = req.ProviderTypeName + "_schedule"
 }
 
+// Schema covers the schedule record itself.
+//
+// Layers, layer members and overrides are managed through separate nested
+// endpoints (POST /api/v1/schedules/:id/layers,
+// .../layers/:layer_id/members and .../overrides) that this provider does not
+// expose yet, so a schedule created here has no rotation until layers are
+// added in the TowerOps UI.
 func (r *ScheduleResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Manages a TowerOps on-call schedule.",
@@ -117,9 +124,9 @@ func (r *ScheduleResource) Create(ctx context.Context, req resource.CreateReques
 	data.ID = types.StringValue(created.ID)
 	data.InsertedAt = types.StringValue(created.InsertedAt)
 
-	if created.Description != nil {
-		data.Description = types.StringValue(*created.Description)
-	}
+	// name, timezone and description already hold their planned values, which
+	// are authoritative after apply, so the create response is only read for
+	// the computed attributes above.
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -173,8 +180,7 @@ func (r *ScheduleResource) Update(ctx context.Context, req resource.UpdateReques
 		schedule.Description = &desc
 	}
 
-	updated, err := r.client.UpdateSchedule(data.ID.ValueString(), schedule)
-	if err != nil {
+	if _, err := r.client.UpdateSchedule(data.ID.ValueString(), schedule); err != nil {
 		if errors.Is(err, ErrNotFound) {
 			created, createErr := r.client.CreateSchedule(schedule)
 			if createErr != nil {
@@ -183,11 +189,6 @@ func (r *ScheduleResource) Update(ctx context.Context, req resource.UpdateReques
 			}
 			data.ID = types.StringValue(created.ID)
 			data.InsertedAt = types.StringValue(created.InsertedAt)
-			data.Name = types.StringValue(created.Name)
-			data.Timezone = types.StringValue(created.Timezone)
-			if created.Description != nil {
-				data.Description = types.StringValue(*created.Description)
-			}
 			resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 			return
 		}
@@ -195,13 +196,9 @@ func (r *ScheduleResource) Update(ctx context.Context, req resource.UpdateReques
 		return
 	}
 
-	data.Name = types.StringValue(updated.Name)
-	data.Timezone = types.StringValue(updated.Timezone)
-
-	if updated.Description != nil {
-		data.Description = types.StringValue(*updated.Description)
-	}
-
+	// Every configured attribute already holds its planned value, and copying a
+	// different value out of the response would fail the apply, so the update
+	// response is not mapped back. Read is where server side drift surfaces.
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 

@@ -10,7 +10,42 @@ The TowerOps provider allows you to manage [TowerOps](https://towerops.net) reso
 
 ## Authentication
 
-The provider requires an API token for authentication. Generate a token from the TowerOps web application under Settings → API Tokens. The token determines which organization's resources are accessible.
+The provider requires an API token for authentication. Generate a token from the TowerOps web application under Settings, API Tokens. The token determines which organization's resources are accessible.
+
+### Token scopes
+
+TowerOps API tokens are scoped. A token that is missing the scope an endpoint
+requires is rejected with HTTP 403 and the machine-readable code
+`insufficient_scope`, which the provider surfaces as
+`API error (403 insufficient_scope): ...`. Grant the token every scope the
+resources in your configuration need:
+
+| Resource | Scopes |
+| --- | --- |
+| `towerops_organization` | `organization:read`, `organization:write` |
+| `towerops_site` | `sites:read`, `sites:write` |
+| `towerops_device` | `devices:read`, `devices:write` |
+| `towerops_check` | `checks:read`, `checks:write` |
+| `towerops_agent` | `agents:read`, `agents:write` |
+| `towerops_integration` | `integrations:read`, `integrations:write` |
+| `towerops_coverage` | `coverages:read`, `coverages:write` |
+| `towerops_schedule` | `config:read`, `config:write` |
+| `towerops_escalation_policy` | `config:read`, `config:write` |
+| `towerops_maintenance_window` | `config:read`, `config:write` |
+| `towerops_webhook_endpoint` | `webhooks:manage` |
+
+Tokens issued before scoping was introduced behave as full-access tokens.
+
+### Error reporting
+
+Every `/api/v1` failure carries a stable machine-readable code alongside its
+human-readable message, and the provider includes both in its diagnostics.
+The codes are `authentication_required`, `invalid_token`, `forbidden`,
+`insufficient_scope`, `not_found`, `bad_request`, `validation_error`,
+`conflict`, `upstream_error`, `timeout`, `rate_limited`, and
+`internal_error`. A `validation_error` also lists the offending fields, so a
+rejected apply reports for example
+`API error (422 validation_error): Validation failed (name: can't be blank)`.
 
 ## Example Usage
 
@@ -166,8 +201,56 @@ resource "towerops_integration" "pagerduty" {
 resource "towerops_maintenance_window" "network_upgrade" {
   name      = "Network Upgrade"
   reason    = "Upgrading core switches to new firmware"
-  starts_at = "2024-03-15T02:00:00Z"
-  ends_at   = "2024-03-15T06:00:00Z"
+  starts_at = "2026-03-15T02:00:00Z"
+  ends_at   = "2026-03-15T06:00:00Z"
+}
+
+resource "towerops_maintenance_window" "weekly_patching" {
+  name            = "Weekly Patching"
+  starts_at       = "2026-03-01T03:00:00Z"
+  ends_at         = "2026-03-01T05:00:00Z"
+  recurring       = true
+  recurrence_rule = "FREQ=WEEKLY;BYDAY=SU"
+}
+```
+
+### RF Coverage
+
+Creating a coverage enqueues an asynchronous compute job, so `status` is
+`queued` immediately after apply and becomes `ready` or `failed` once the
+worker finishes. Inputs are SI only.
+
+```terraform
+resource "towerops_coverage" "north_sector" {
+  name          = "North sector 5 GHz"
+  site_id       = towerops_site.example.id
+  antenna_slug  = "rf-elements-tp-sh-30"
+  frequency_mhz = 5800
+  tx_power_dbm  = 22.0
+  height_agl_m  = 30.0
+  azimuth_deg   = 0
+  radius_m      = 6437
+}
+```
+
+### Outbound Webhook
+
+Requires a token with the `webhooks:manage` scope. The signing secret is
+returned exactly once, on create.
+
+```terraform
+resource "towerops_webhook_endpoint" "alerts" {
+  name = "Alert bridge"
+  url  = "https://hooks.example.com/towerops/alerts"
+  events = [
+    "alert.triggered",
+    "alert.resolved",
+  ]
+}
+
+output "webhook_secret" {
+  value     = towerops_webhook_endpoint.alerts.secret
+  sensitive = true
 }
 ```
 

@@ -10,12 +10,36 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
+
+// checkTestData emits the `{"data": ...}` success envelope every /api/v1
+// endpoint returns.
+func checkTestData(w http.ResponseWriter, status int, check Check) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]Check{"data": check})
+}
+
+// checkTestDeleted emits the delete envelope the shared resource helper returns.
+func checkTestDeleted(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, `{"data":{"deleted":true}}`)
+}
+
+// checkTestError emits the API failure envelope.
+func checkTestError(w http.ResponseWriter, status int, code, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	fmt.Fprintf(w, `{"error":{"code":%q,"message":%q}}`, code, message)
+}
 
 func TestAccCheckResource_http(t *testing.T) {
 	var checkID string
 	var mu sync.Mutex
 	enabled := true
+	alerting := true
 	interval := 60
 	timeout := 5000
 	retry := 30
@@ -27,59 +51,41 @@ func TestAccCheckResource_http(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 
+		checkResp := Check{
+			ID:                   "test-http-check-id",
+			Name:                 "Web Health",
+			CheckType:            "http",
+			Enabled:              &enabled,
+			Alerting:             &alerting,
+			IntervalSeconds:      &interval,
+			TimeoutMs:            &timeout,
+			RetryIntervalSeconds: &retry,
+			MaxCheckAttempts:     &maxAttempts,
+			CurrentState:         &currentState,
+			CurrentStateType:     &stateType,
+			Config: map[string]any{
+				"url":              "https://example.com/health",
+				"method":           "GET",
+				"expected_status":  200,
+				"verify_ssl":       true,
+				"follow_redirects": true,
+			},
+			InsertedAt: "2024-01-01T00:00:00Z",
+		}
+
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/checks":
-			checkID = "test-http-check-id"
-			w.WriteHeader(http.StatusCreated)
-			json.NewEncoder(w).Encode(Check{
-				ID:                   checkID,
-				Name:                 "Web Health",
-				CheckType:            "http",
-				Enabled:              &enabled,
-				IntervalSeconds:      &interval,
-				TimeoutMs:            &timeout,
-				RetryIntervalSeconds: &retry,
-				MaxCheckAttempts:     &maxAttempts,
-				CurrentState:         &currentState,
-				CurrentStateType:     &stateType,
-				Config: map[string]any{
-					"url":              "https://example.com/health",
-					"method":           "GET",
-					"expected_status":  200,
-					"verify_ssl":       true,
-					"follow_redirects": true,
-				},
-				InsertedAt: "2024-01-01T00:00:00Z",
-			})
+			checkID = checkResp.ID
+			checkTestData(w, http.StatusCreated, checkResp)
 
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/checks/"+checkID:
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(Check{
-				ID:                   checkID,
-				Name:                 "Web Health",
-				CheckType:            "http",
-				Enabled:              &enabled,
-				IntervalSeconds:      &interval,
-				TimeoutMs:            &timeout,
-				RetryIntervalSeconds: &retry,
-				MaxCheckAttempts:     &maxAttempts,
-				CurrentState:         &currentState,
-				CurrentStateType:     &stateType,
-				Config: map[string]any{
-					"url":              "https://example.com/health",
-					"method":           "GET",
-					"expected_status":  200,
-					"verify_ssl":       true,
-					"follow_redirects": true,
-				},
-				InsertedAt: "2024-01-01T00:00:00Z",
-			})
+			checkTestData(w, http.StatusOK, checkResp)
 
 		case r.Method == http.MethodDelete && r.URL.Path == "/api/v1/checks/"+checkID:
-			w.WriteHeader(http.StatusNoContent)
+			checkTestDeleted(w)
 
 		default:
-			w.WriteHeader(http.StatusNotFound)
+			checkTestError(w, http.StatusNotFound, "not_found", "Check not found")
 		}
 	}))
 	defer server.Close()
@@ -95,6 +101,7 @@ func TestAccCheckResource_http(t *testing.T) {
 					resource.TestCheckResourceAttr("towerops_check.test", "url", "https://example.com/health"),
 					resource.TestCheckResourceAttr("towerops_check.test", "expected_status", "200"),
 					resource.TestCheckResourceAttr("towerops_check.test", "enabled", "true"),
+					resource.TestCheckResourceAttr("towerops_check.test", "alerting", "true"),
 					resource.TestCheckResourceAttrSet("towerops_check.test", "id"),
 					resource.TestCheckResourceAttrSet("towerops_check.test", "inserted_at"),
 				),
@@ -107,6 +114,7 @@ func TestAccCheckResource_tcp(t *testing.T) {
 	var checkID string
 	var mu sync.Mutex
 	enabled := true
+	alerting := true
 	interval := 60
 	timeout := 5000
 	retry := 30
@@ -119,55 +127,39 @@ func TestAccCheckResource_tcp(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 
+		checkResp := Check{
+			ID:                   "test-tcp-check-id",
+			Name:                 "MySQL Port",
+			CheckType:            "tcp",
+			DeviceID:             &deviceID,
+			Enabled:              &enabled,
+			Alerting:             &alerting,
+			IntervalSeconds:      &interval,
+			TimeoutMs:            &timeout,
+			RetryIntervalSeconds: &retry,
+			MaxCheckAttempts:     &maxAttempts,
+			CurrentState:         &currentState,
+			CurrentStateType:     &stateType,
+			Config: map[string]any{
+				"host": "10.0.0.5",
+				"port": 3306,
+			},
+			InsertedAt: "2024-01-01T00:00:00Z",
+		}
+
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/checks":
-			checkID = "test-tcp-check-id"
-			w.WriteHeader(http.StatusCreated)
-			json.NewEncoder(w).Encode(Check{
-				ID:                   checkID,
-				Name:                 "MySQL Port",
-				CheckType:            "tcp",
-				DeviceID:             &deviceID,
-				Enabled:              &enabled,
-				IntervalSeconds:      &interval,
-				TimeoutMs:            &timeout,
-				RetryIntervalSeconds: &retry,
-				MaxCheckAttempts:     &maxAttempts,
-				CurrentState:         &currentState,
-				CurrentStateType:     &stateType,
-				Config: map[string]any{
-					"host": "10.0.0.5",
-					"port": 3306,
-				},
-				InsertedAt: "2024-01-01T00:00:00Z",
-			})
+			checkID = checkResp.ID
+			checkTestData(w, http.StatusCreated, checkResp)
 
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/checks/"+checkID:
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(Check{
-				ID:                   checkID,
-				Name:                 "MySQL Port",
-				CheckType:            "tcp",
-				DeviceID:             &deviceID,
-				Enabled:              &enabled,
-				IntervalSeconds:      &interval,
-				TimeoutMs:            &timeout,
-				RetryIntervalSeconds: &retry,
-				MaxCheckAttempts:     &maxAttempts,
-				CurrentState:         &currentState,
-				CurrentStateType:     &stateType,
-				Config: map[string]any{
-					"host": "10.0.0.5",
-					"port": 3306,
-				},
-				InsertedAt: "2024-01-01T00:00:00Z",
-			})
+			checkTestData(w, http.StatusOK, checkResp)
 
 		case r.Method == http.MethodDelete && r.URL.Path == "/api/v1/checks/"+checkID:
-			w.WriteHeader(http.StatusNoContent)
+			checkTestDeleted(w)
 
 		default:
-			w.WriteHeader(http.StatusNotFound)
+			checkTestError(w, http.StatusNotFound, "not_found", "Check not found")
 		}
 	}))
 	defer server.Close()
@@ -192,7 +184,9 @@ func TestAccCheckResource_tcp(t *testing.T) {
 func TestAccCheckResource_dns(t *testing.T) {
 	var checkID string
 	var mu sync.Mutex
+	var sentServer string
 	enabled := true
+	alerting := true
 	interval := 60
 	timeout := 5000
 	retry := 30
@@ -204,55 +198,45 @@ func TestAccCheckResource_dns(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 
+		checkResp := Check{
+			ID:                   "test-dns-check-id",
+			Name:                 "DNS Resolution",
+			CheckType:            "dns",
+			Enabled:              &enabled,
+			Alerting:             &alerting,
+			IntervalSeconds:      &interval,
+			TimeoutMs:            &timeout,
+			RetryIntervalSeconds: &retry,
+			MaxCheckAttempts:     &maxAttempts,
+			CurrentState:         &currentState,
+			CurrentStateType:     &stateType,
+			Config: map[string]any{
+				"hostname":    "google.com",
+				"server":      sentServer,
+				"record_type": "A",
+			},
+			InsertedAt: "2024-01-01T00:00:00Z",
+		}
+
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/checks":
-			checkID = "test-dns-check-id"
-			w.WriteHeader(http.StatusCreated)
-			json.NewEncoder(w).Encode(Check{
-				ID:                   checkID,
-				Name:                 "DNS Resolution",
-				CheckType:            "dns",
-				Enabled:              &enabled,
-				IntervalSeconds:      &interval,
-				TimeoutMs:            &timeout,
-				RetryIntervalSeconds: &retry,
-				MaxCheckAttempts:     &maxAttempts,
-				CurrentState:         &currentState,
-				CurrentStateType:     &stateType,
-				Config: map[string]any{
-					"hostname":    "google.com",
-					"server":      "8.8.8.8",
-					"record_type": "A",
-				},
-				InsertedAt: "2024-01-01T00:00:00Z",
-			})
+			// The DNS executor reads the nameserver from config["server"], so
+			// that is the key the provider has to write dns_server into.
+			var body map[string]Check
+			json.NewDecoder(r.Body).Decode(&body)
+			sentServer, _ = body["check"].Config["server"].(string)
+			checkResp.Config["server"] = sentServer
+			checkID = checkResp.ID
+			checkTestData(w, http.StatusCreated, checkResp)
 
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/checks/"+checkID:
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(Check{
-				ID:                   checkID,
-				Name:                 "DNS Resolution",
-				CheckType:            "dns",
-				Enabled:              &enabled,
-				IntervalSeconds:      &interval,
-				TimeoutMs:            &timeout,
-				RetryIntervalSeconds: &retry,
-				MaxCheckAttempts:     &maxAttempts,
-				CurrentState:         &currentState,
-				CurrentStateType:     &stateType,
-				Config: map[string]any{
-					"hostname":    "google.com",
-					"server":      "8.8.8.8",
-					"record_type": "A",
-				},
-				InsertedAt: "2024-01-01T00:00:00Z",
-			})
+			checkTestData(w, http.StatusOK, checkResp)
 
 		case r.Method == http.MethodDelete && r.URL.Path == "/api/v1/checks/"+checkID:
-			w.WriteHeader(http.StatusNoContent)
+			checkTestDeleted(w)
 
 		default:
-			w.WriteHeader(http.StatusNotFound)
+			checkTestError(w, http.StatusNotFound, "not_found", "Check not found")
 		}
 	}))
 	defer server.Close()
@@ -278,6 +262,7 @@ func TestAccCheckResource_ping(t *testing.T) {
 	var checkID string
 	var mu sync.Mutex
 	enabled := true
+	alerting := true
 	interval := 60
 	timeout := 5000
 	retry := 30
@@ -290,55 +275,39 @@ func TestAccCheckResource_ping(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 
+		checkResp := Check{
+			ID:                   "test-ping-check-id",
+			Name:                 "Gateway Ping",
+			CheckType:            "ping",
+			DeviceID:             &deviceID,
+			Enabled:              &enabled,
+			Alerting:             &alerting,
+			IntervalSeconds:      &interval,
+			TimeoutMs:            &timeout,
+			RetryIntervalSeconds: &retry,
+			MaxCheckAttempts:     &maxAttempts,
+			CurrentState:         &currentState,
+			CurrentStateType:     &stateType,
+			Config: map[string]any{
+				"host":  "10.0.0.1",
+				"count": 3,
+			},
+			InsertedAt: "2024-01-01T00:00:00Z",
+		}
+
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/checks":
-			checkID = "test-ping-check-id"
-			w.WriteHeader(http.StatusCreated)
-			json.NewEncoder(w).Encode(Check{
-				ID:                   checkID,
-				Name:                 "Gateway Ping",
-				CheckType:            "ping",
-				DeviceID:             &deviceID,
-				Enabled:              &enabled,
-				IntervalSeconds:      &interval,
-				TimeoutMs:            &timeout,
-				RetryIntervalSeconds: &retry,
-				MaxCheckAttempts:     &maxAttempts,
-				CurrentState:         &currentState,
-				CurrentStateType:     &stateType,
-				Config: map[string]any{
-					"host":  "10.0.0.1",
-					"count": 3,
-				},
-				InsertedAt: "2024-01-01T00:00:00Z",
-			})
+			checkID = checkResp.ID
+			checkTestData(w, http.StatusCreated, checkResp)
 
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/checks/"+checkID:
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(Check{
-				ID:                   checkID,
-				Name:                 "Gateway Ping",
-				CheckType:            "ping",
-				DeviceID:             &deviceID,
-				Enabled:              &enabled,
-				IntervalSeconds:      &interval,
-				TimeoutMs:            &timeout,
-				RetryIntervalSeconds: &retry,
-				MaxCheckAttempts:     &maxAttempts,
-				CurrentState:         &currentState,
-				CurrentStateType:     &stateType,
-				Config: map[string]any{
-					"host":  "10.0.0.1",
-					"count": 3,
-				},
-				InsertedAt: "2024-01-01T00:00:00Z",
-			})
+			checkTestData(w, http.StatusOK, checkResp)
 
 		case r.Method == http.MethodDelete && r.URL.Path == "/api/v1/checks/"+checkID:
-			w.WriteHeader(http.StatusNoContent)
+			checkTestDeleted(w)
 
 		default:
-			w.WriteHeader(http.StatusNotFound)
+			checkTestError(w, http.StatusNotFound, "not_found", "Check not found")
 		}
 	}))
 	defer server.Close()
@@ -365,6 +334,7 @@ func TestAccCheckResource_update(t *testing.T) {
 	var currentName string
 	var mu sync.Mutex
 	enabled := true
+	alerting := true
 	interval := 60
 	timeout := 5000
 	retry := 30
@@ -376,86 +346,50 @@ func TestAccCheckResource_update(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 
+		respond := func(status int) {
+			checkTestData(w, status, Check{
+				ID:                   checkID,
+				Name:                 currentName,
+				CheckType:            "http",
+				Enabled:              &enabled,
+				Alerting:             &alerting,
+				IntervalSeconds:      &interval,
+				TimeoutMs:            &timeout,
+				RetryIntervalSeconds: &retry,
+				MaxCheckAttempts:     &maxAttempts,
+				CurrentState:         &currentState,
+				CurrentStateType:     &stateType,
+				Config: map[string]any{
+					"url":              "https://example.com",
+					"method":           "GET",
+					"expected_status":  200,
+					"verify_ssl":       true,
+					"follow_redirects": true,
+				},
+				InsertedAt: "2024-01-01T00:00:00Z",
+			})
+		}
+
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/checks":
 			checkID = "test-update-check-id"
 			currentName = "Original"
-			w.WriteHeader(http.StatusCreated)
-			json.NewEncoder(w).Encode(Check{
-				ID:                   checkID,
-				Name:                 currentName,
-				CheckType:            "http",
-				Enabled:              &enabled,
-				IntervalSeconds:      &interval,
-				TimeoutMs:            &timeout,
-				RetryIntervalSeconds: &retry,
-				MaxCheckAttempts:     &maxAttempts,
-				CurrentState:         &currentState,
-				CurrentStateType:     &stateType,
-				Config: map[string]any{
-					"url":              "https://example.com",
-					"method":           "GET",
-					"expected_status":  200,
-					"verify_ssl":       true,
-					"follow_redirects": true,
-				},
-				InsertedAt: "2024-01-01T00:00:00Z",
-			})
+			respond(http.StatusCreated)
 
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/checks/"+checkID:
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(Check{
-				ID:                   checkID,
-				Name:                 currentName,
-				CheckType:            "http",
-				Enabled:              &enabled,
-				IntervalSeconds:      &interval,
-				TimeoutMs:            &timeout,
-				RetryIntervalSeconds: &retry,
-				MaxCheckAttempts:     &maxAttempts,
-				CurrentState:         &currentState,
-				CurrentStateType:     &stateType,
-				Config: map[string]any{
-					"url":              "https://example.com",
-					"method":           "GET",
-					"expected_status":  200,
-					"verify_ssl":       true,
-					"follow_redirects": true,
-				},
-				InsertedAt: "2024-01-01T00:00:00Z",
-			})
+			respond(http.StatusOK)
 
 		case r.Method == http.MethodPatch && r.URL.Path == "/api/v1/checks/"+checkID:
 			var body map[string]Check
 			json.NewDecoder(r.Body).Decode(&body)
 			currentName = body["check"].Name
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(Check{
-				ID:                   checkID,
-				Name:                 currentName,
-				CheckType:            "http",
-				Enabled:              &enabled,
-				IntervalSeconds:      &interval,
-				TimeoutMs:            &timeout,
-				RetryIntervalSeconds: &retry,
-				MaxCheckAttempts:     &maxAttempts,
-				CurrentState:         &currentState,
-				CurrentStateType:     &stateType,
-				Config: map[string]any{
-					"url":              "https://example.com",
-					"method":           "GET",
-					"expected_status":  200,
-					"verify_ssl":       true,
-					"follow_redirects": true,
-				},
-				InsertedAt: "2024-01-01T00:00:00Z",
-			})
+			respond(http.StatusOK)
 
 		case r.Method == http.MethodDelete && r.URL.Path == "/api/v1/checks/"+checkID:
-			w.WriteHeader(http.StatusNoContent)
+			checkTestDeleted(w)
 
 		default:
-			w.WriteHeader(http.StatusNotFound)
+			checkTestError(w, http.StatusNotFound, "not_found", "Check not found")
 		}
 	}))
 	defer server.Close()
@@ -479,11 +413,112 @@ func TestAccCheckResource_update(t *testing.T) {
 	})
 }
 
+// TestAccCheckResource_alerting pins the arming contract: the create endpoint
+// ignores `alerting` (a new check is always armed), and only the update endpoint
+// honors it.
+func TestAccCheckResource_alerting(t *testing.T) {
+	var checkID string
+	var mu sync.Mutex
+	var createSentAlerting bool
+	enabled := true
+	armed := true
+	interval := 60
+	timeout := 5000
+	retry := 30
+	maxAttempts := 3
+	currentState := 3
+	stateType := "soft"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+
+		respond := func(status int) {
+			checkTestData(w, status, Check{
+				ID:                   checkID,
+				Name:                 "Web Health",
+				CheckType:            "http",
+				Enabled:              &enabled,
+				Alerting:             &armed,
+				IntervalSeconds:      &interval,
+				TimeoutMs:            &timeout,
+				RetryIntervalSeconds: &retry,
+				MaxCheckAttempts:     &maxAttempts,
+				CurrentState:         &currentState,
+				CurrentStateType:     &stateType,
+				Config: map[string]any{
+					"url":              "https://example.com/health",
+					"method":           "GET",
+					"expected_status":  200,
+					"verify_ssl":       true,
+					"follow_redirects": true,
+				},
+				InsertedAt: "2024-01-01T00:00:00Z",
+			})
+		}
+
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/checks":
+			var body map[string]Check
+			json.NewDecoder(r.Body).Decode(&body)
+			createSentAlerting = body["check"].Alerting != nil
+			checkID = "test-alerting-check-id"
+			armed = true
+			respond(http.StatusCreated)
+
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/checks/"+checkID:
+			respond(http.StatusOK)
+
+		case r.Method == http.MethodPatch && r.URL.Path == "/api/v1/checks/"+checkID:
+			var body map[string]Check
+			json.NewDecoder(r.Body).Decode(&body)
+			if body["check"].Alerting != nil {
+				armed = *body["check"].Alerting
+			}
+			respond(http.StatusOK)
+
+		case r.Method == http.MethodDelete && r.URL.Path == "/api/v1/checks/"+checkID:
+			checkTestDeleted(w)
+
+		default:
+			checkTestError(w, http.StatusNotFound, "not_found", "Check not found")
+		}
+	}))
+	defer server.Close()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories(server.URL),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCheckResourceHTTP(server.URL),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("towerops_check.test", "alerting", "true"),
+					func(*terraform.State) error {
+						mu.Lock()
+						defer mu.Unlock()
+						if createSentAlerting {
+							return fmt.Errorf("create request carried alerting, the API ignores it there")
+						}
+						return nil
+					},
+				),
+			},
+			{
+				Config: testAccCheckResourceHTTPAlerting(server.URL, false),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("towerops_check.test", "alerting", "false"),
+				),
+			},
+		},
+	})
+}
+
 func TestAccCheckResource_recreateOn404(t *testing.T) {
 	var checkID string
 	var checkDeleted bool
 	var mu sync.Mutex
 	enabled := true
+	alerting := true
 	interval := 60
 	timeout := 5000
 	retry := 30
@@ -500,6 +535,7 @@ func TestAccCheckResource_recreateOn404(t *testing.T) {
 			Name:                 "Web Health",
 			CheckType:            "http",
 			Enabled:              &enabled,
+			Alerting:             &alerting,
 			IntervalSeconds:      &interval,
 			TimeoutMs:            &timeout,
 			RetryIntervalSeconds: &retry,
@@ -520,33 +556,28 @@ func TestAccCheckResource_recreateOn404(t *testing.T) {
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/checks":
 			checkID = "new-check-id"
 			checkDeleted = false
-			w.WriteHeader(http.StatusCreated)
-			json.NewEncoder(w).Encode(checkResp)
+			checkTestData(w, http.StatusCreated, checkResp)
 
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/checks/"+checkID:
 			if checkDeleted {
-				w.WriteHeader(http.StatusNotFound)
-				w.Write([]byte(`{"error": "check not found"}`))
+				checkTestError(w, http.StatusNotFound, "not_found", "Check not found")
 				return
 			}
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(checkResp)
+			checkTestData(w, http.StatusOK, checkResp)
 
 		case r.Method == http.MethodPatch && r.URL.Path == "/api/v1/checks/"+checkID:
 			if checkDeleted {
-				w.WriteHeader(http.StatusNotFound)
-				w.Write([]byte(`{"error": "check not found"}`))
+				checkTestError(w, http.StatusNotFound, "not_found", "Check not found")
 				return
 			}
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(checkResp)
+			checkTestData(w, http.StatusOK, checkResp)
 
 		case r.Method == http.MethodDelete && r.URL.Path == "/api/v1/checks/"+checkID:
 			checkDeleted = true
-			w.WriteHeader(http.StatusNoContent)
+			checkTestDeleted(w)
 
 		default:
-			w.WriteHeader(http.StatusNotFound)
+			checkTestError(w, http.StatusNotFound, "not_found", "Check not found")
 		}
 	}))
 	defer server.Close()
@@ -579,6 +610,7 @@ func TestAccCheckResource_importState(t *testing.T) {
 	var checkID string
 	var mu sync.Mutex
 	enabled := true
+	alerting := true
 	interval := 60
 	timeout := 5000
 	retry := 30
@@ -595,6 +627,7 @@ func TestAccCheckResource_importState(t *testing.T) {
 			Name:                 "Web Health",
 			CheckType:            "http",
 			Enabled:              &enabled,
+			Alerting:             &alerting,
 			IntervalSeconds:      &interval,
 			TimeoutMs:            &timeout,
 			RetryIntervalSeconds: &retry,
@@ -614,18 +647,16 @@ func TestAccCheckResource_importState(t *testing.T) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/checks":
 			checkID = "imported-check-id"
-			w.WriteHeader(http.StatusCreated)
-			json.NewEncoder(w).Encode(checkResp)
+			checkTestData(w, http.StatusCreated, checkResp)
 
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/checks/imported-check-id":
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(checkResp)
+			checkTestData(w, http.StatusOK, checkResp)
 
 		case r.Method == http.MethodDelete && r.URL.Path == "/api/v1/checks/imported-check-id":
-			w.WriteHeader(http.StatusNoContent)
+			checkTestDeleted(w)
 
 		default:
-			w.WriteHeader(http.StatusNotFound)
+			checkTestError(w, http.StatusNotFound, "not_found", "Check not found")
 		}
 	}))
 	defer server.Close()
@@ -651,11 +682,12 @@ func TestAccCheckResource_importState(t *testing.T) {
 func TestAccCheckResource_createError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/checks" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(`{"error": "name is required"}`))
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			fmt.Fprint(w, `{"error":{"code":"validation_error","message":"Validation failed","details":{"fields":{"name":["can't be blank"]}}}}`)
 			return
 		}
-		w.WriteHeader(http.StatusNotFound)
+		checkTestError(w, http.StatusNotFound, "not_found", "Check not found")
 	}))
 	defer server.Close()
 
@@ -664,7 +696,7 @@ func TestAccCheckResource_createError(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccCheckResourceHTTP(server.URL),
-				ExpectError: regexp.MustCompile(`Failed to create check`),
+				ExpectError: regexp.MustCompile(`(?s)Failed to create check.*validation_error`),
 			},
 		},
 	})
@@ -702,6 +734,23 @@ resource "towerops_check" "test" {
   expected_status = 200
 }
 `, apiURL, name)
+}
+
+func testAccCheckResourceHTTPAlerting(apiURL string, alerting bool) string {
+	return fmt.Sprintf(`
+provider "towerops" {
+  token   = "test-token"
+  api_url = %q
+}
+
+resource "towerops_check" "test" {
+  name            = "Web Health"
+  check_type      = "http"
+  url             = "https://example.com/health"
+  expected_status = 200
+  alerting        = %t
+}
+`, apiURL, alerting)
 }
 
 func testAccCheckResourceTCP(apiURL string) string {

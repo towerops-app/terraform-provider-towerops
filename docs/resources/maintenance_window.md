@@ -45,6 +45,19 @@ resource "towerops_maintenance_window" "router_update" {
 }
 ```
 
+### Recurring Maintenance Window
+
+```terraform
+resource "towerops_maintenance_window" "weekly_reboot" {
+  name            = "Weekly Reboot Window"
+  reason          = "Rolling reboot of edge radios"
+  starts_at       = "2024-03-17T02:00:00Z"
+  ends_at         = "2024-03-17T03:00:00Z"
+  recurring       = true
+  recurrence_rule = "FREQ=WEEKLY;BYDAY=SU"
+}
+```
+
 ## Schema
 
 ### Required
@@ -56,6 +69,8 @@ resource "towerops_maintenance_window" "router_update" {
 ### Optional
 
 - `reason` (String) - The reason for the maintenance window.
+- `recurring` (Boolean) - Whether the maintenance window repeats. Defaults to `false`.
+- `recurrence_rule` (String) - An iCalendar RRULE string describing the repeat pattern (e.g. `FREQ=WEEKLY;BYDAY=SU`). Only meaningful when `recurring` is `true`.
 - `suppress_alerts` (Boolean) - Whether to suppress alerts during the window. Defaults to `true`.
 - `site_id` (String) - The site to apply the maintenance window to. If omitted, applies to all sites.
 - `device_id` (String) - The device to apply the maintenance window to. If omitted, applies to all devices.
