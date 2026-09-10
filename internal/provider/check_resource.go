@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -46,6 +47,8 @@ type CheckResourceModel struct {
 	VerifySSL       types.Bool   `tfsdk:"verify_ssl"`
 	FollowRedirects types.Bool   `tfsdk:"follow_redirects"`
 	ContentMatch    types.String `tfsdk:"content_match"`
+	RequestHeaders  types.Map    `tfsdk:"request_headers"`
+	RequestBody     types.String `tfsdk:"request_body"`
 
 	// TCP config
 	Host         types.String `tfsdk:"host"`
@@ -60,7 +63,10 @@ type CheckResourceModel struct {
 	ExpectedResult types.String `tfsdk:"expected_result"`
 
 	// Ping config
-	PingCount types.Int64 `tfsdk:"ping_count"`
+	PingCount          types.Int64   `tfsdk:"ping_count"`
+	LossWarningPercent types.Float64 `tfsdk:"loss_warning_percent"`
+	LatencyWarningMs   types.Float64 `tfsdk:"latency_warning_ms"`
+	LatencyCriticalMs  types.Float64 `tfsdk:"latency_critical_ms"`
 
 	// Computed
 	CurrentState     types.Int64  `tfsdk:"current_state"`
@@ -181,6 +187,15 @@ func (r *CheckResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				Description: "Regex pattern to match against HTTP response body.",
 				Optional:    true,
 			},
+			"request_headers": schema.MapAttribute{
+				Description: "Additional request headers sent with an HTTP check.",
+				Optional:    true,
+				ElementType: types.StringType,
+			},
+			"request_body": schema.StringAttribute{
+				Description: "Request body sent with an HTTP check.",
+				Optional:    true,
+			},
 
 			// TCP config
 			"host": schema.StringAttribute{
@@ -222,10 +237,22 @@ func (r *CheckResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 
 			// Ping config
 			"ping_count": schema.Int64Attribute{
-				Description: "Number of ping packets to send. Defaults to 3.",
+				Description: "Number of ping packets to send. Defaults to 3. The executor clamps the value to 1 through 10.",
 				Optional:    true,
 				Computed:    true,
 				Default:     int64default.StaticInt64(3),
+			},
+			"loss_warning_percent": schema.Float64Attribute{
+				Description: "Packet loss percentage above which a ping check reports WARNING, 0 through 100. The executor default is 0.0, so any loss warns.",
+				Optional:    true,
+			},
+			"latency_warning_ms": schema.Float64Attribute{
+				Description: "Average round trip time in milliseconds above which a ping check reports WARNING. Must be positive and below latency_critical_ms. No threshold is applied when unset.",
+				Optional:    true,
+			},
+			"latency_critical_ms": schema.Float64Attribute{
+				Description: "Average round trip time in milliseconds above which a ping check reports CRITICAL. Must be positive. No threshold is applied when unset.",
+				Optional:    true,
 			},
 
 			// Computed
@@ -482,6 +509,20 @@ func buildConfig(data CheckResourceModel) map[string]any {
 		if !data.ContentMatch.IsNull() {
 			config["regex"] = data.ContentMatch.ValueString()
 		}
+		if !data.RequestHeaders.IsNull() && !data.RequestHeaders.IsUnknown() {
+			headers := make(map[string]any, len(data.RequestHeaders.Elements()))
+			for name, value := range data.RequestHeaders.Elements() {
+				if s, ok := value.(types.String); ok && !s.IsNull() && !s.IsUnknown() {
+					headers[name] = s.ValueString()
+				}
+			}
+			if len(headers) > 0 {
+				config["headers"] = headers
+			}
+		}
+		if !data.RequestBody.IsNull() {
+			config["body"] = data.RequestBody.ValueString()
+		}
 
 	case "tcp":
 		if !data.Host.IsNull() {
@@ -517,6 +558,15 @@ func buildConfig(data CheckResourceModel) map[string]any {
 		}
 		if !data.PingCount.IsNull() {
 			config["count"] = int(data.PingCount.ValueInt64())
+		}
+		if !data.LossWarningPercent.IsNull() {
+			config["loss_warning_percent"] = data.LossWarningPercent.ValueFloat64()
+		}
+		if !data.LatencyWarningMs.IsNull() {
+			config["latency_warning_ms"] = data.LatencyWarningMs.ValueFloat64()
+		}
+		if !data.LatencyCriticalMs.IsNull() {
+			config["latency_critical_ms"] = data.LatencyCriticalMs.ValueFloat64()
 		}
 	}
 
@@ -649,6 +699,20 @@ func unpackConfig(config map[string]any, checkType string, data *CheckResourceMo
 		if v, ok := config["regex"].(string); ok {
 			data.ContentMatch = types.StringValue(v)
 		}
+		if raw, ok := config["headers"].(map[string]any); ok && len(raw) > 0 {
+			elements := make(map[string]attr.Value, len(raw))
+			for name, value := range raw {
+				if s, ok := value.(string); ok {
+					elements[name] = types.StringValue(s)
+				}
+			}
+			if headers, diags := types.MapValue(types.StringType, elements); !diags.HasError() {
+				data.RequestHeaders = headers
+			}
+		}
+		if v, ok := config["body"].(string); ok {
+			data.RequestBody = types.StringValue(v)
+		}
 
 	case "tcp":
 		if v, ok := config["host"].(string); ok {
@@ -685,6 +749,32 @@ func unpackConfig(config map[string]any, checkType string, data *CheckResourceMo
 		if v, ok := configInt(config, "count"); ok {
 			data.PingCount = types.Int64Value(int64(v))
 		}
+		if v, ok := configFloat(config, "loss_warning_percent"); ok {
+			data.LossWarningPercent = types.Float64Value(v)
+		}
+		if v, ok := configFloat(config, "latency_warning_ms"); ok {
+			data.LatencyWarningMs = types.Float64Value(v)
+		}
+		if v, ok := configFloat(config, "latency_critical_ms"); ok {
+			data.LatencyCriticalMs = types.Float64Value(v)
+		}
+	}
+}
+
+// configFloat extracts a float from a config map, tolerating the integer forms
+// a hand-written config or a round trip through JSON can produce.
+func configFloat(config map[string]any, key string) (float64, bool) {
+	switch n := config[key].(type) {
+	case float64:
+		return n, true
+	case float32:
+		return float64(n), true
+	case int:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	default:
+		return 0, false
 	}
 }
 

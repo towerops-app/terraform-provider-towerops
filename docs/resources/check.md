@@ -90,7 +90,7 @@ resource "towerops_check" "gateway_ping" {
 }
 ```
 
-### Ping Check with Custom Count
+### Ping Check with Thresholds
 
 ```terraform
 resource "towerops_check" "wan_ping" {
@@ -100,6 +100,28 @@ resource "towerops_check" "wan_ping" {
   ping_count       = 5
   interval_seconds = 120
   timeout_ms       = 10000
+
+  loss_warning_percent = 2.0
+  latency_warning_ms   = 100
+  latency_critical_ms  = 250
+}
+```
+
+### HTTP Check with Headers and a Body
+
+```terraform
+resource "towerops_check" "ingest_probe" {
+  name            = "Ingest Probe"
+  check_type      = "http"
+  url             = "https://api.example.com/v1/probe"
+  method          = "POST"
+  expected_status = 202
+  request_body    = jsonencode({ probe = true })
+
+  request_headers = {
+    "Content-Type" = "application/json"
+    "X-Probe"      = "towerops"
+  }
 }
 ```
 
@@ -130,6 +152,8 @@ resource "towerops_check" "wan_ping" {
 - `verify_ssl` (Boolean) - Whether to verify SSL certificates. Default: `true`.
 - `follow_redirects` (Boolean) - Whether to follow HTTP redirects. Default: `true`.
 - `content_match` (String) - Regex pattern to match against the response body.
+- `request_headers` (Map of String) - Additional request headers sent with the check.
+- `request_body` (String) - Request body sent with the check.
 
 #### TCP Check Fields (used when `check_type = "tcp"`)
 
@@ -148,7 +172,15 @@ resource "towerops_check" "wan_ping" {
 #### Ping Check Fields (used when `check_type = "ping"`)
 
 - `host` (String) - The host to ping. Required for ping checks.
-- `ping_count` (Number) - Number of ping packets to send. Default: `3`.
+- `ping_count` (Number) - Number of ping packets to send. Default: `3`. The executor clamps the value to 1 through 10.
+- `loss_warning_percent` (Number) - Packet loss percentage above which the check reports WARNING, 0 through 100. The executor default is `0.0`, so any packet loss warns.
+- `latency_warning_ms` (Number) - Average round trip time in milliseconds above which the check reports WARNING. Must be positive and below `latency_critical_ms`. No threshold is applied when unset.
+- `latency_critical_ms` (Number) - Average round trip time in milliseconds above which the check reports CRITICAL. Must be positive. No threshold is applied when unset.
+
+~> Packet loss is only graded when the check runs through the ping executor. A
+result ingested from an agent carries status and response time but not loss, so
+`loss_warning_percent` cannot be applied to it and grading falls back to the
+latency thresholds alone.
 
 ### Read-Only
 
